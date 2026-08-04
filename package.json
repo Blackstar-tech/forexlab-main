@@ -1,0 +1,16 @@
+{
+  "name": "forexlab-journal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "tsx --watch src/server.ts",
+    "build:client": "esbuild src/client.ts --bundle --outfile=public/client.js",
+    "build": "tsc && npm run build:client",
+    "start": "node dist/server.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "tsx": "^4.23.5"
+  }
+}
