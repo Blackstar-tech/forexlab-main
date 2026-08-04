@@ -134,10 +134,9 @@ function clearSessionCookie(res: ServerResponse): void {
 
 function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const chunks: Uint8Array[] = [];
+    const chunks: Buffer[] = [];
     let size = 0;
-
-    req.on("data", (chunk: Uint8Array) => {
+    req.on("data", (chunk: Buffer) => {
       size += chunk.length;
       if (size > maxBodyBytes) {
         reject(new Error("Request body is too large"));
@@ -145,21 +144,18 @@ function readBody(req: IncomingMessage): Promise<unknown> {
       }
       chunks.push(chunk);
     });
-
     req.on("end", () => {
       const raw = Buffer.concat(chunks).toString("utf8");
       if (!raw) {
         resolve({});
         return;
       }
-
       try {
         resolve(JSON.parse(raw));
       } catch {
         reject(new Error("Invalid JSON body"));
       }
     });
-
     req.on("error", reject);
   });
 }
@@ -492,7 +488,7 @@ async function handleUploadCreate(req: IncomingMessage, res: ServerResponse): Pr
 
   await fs.promises.mkdir(uploadsDir, { recursive: true });
   const filename = `${makeId("shot")}.${ext}`;
-  await fs.promises.writeFile(path.join(uploadsDir, filename), buffer);
+  await fs.promises.writeFile(path.join(uploadsDir, filename), new Uint8Array(buffer));
 
   sendJson(res, 201, { url: `/api/uploads/${filename}` });
 }
