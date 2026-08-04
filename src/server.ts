@@ -1,7 +1,29 @@
 import { createServer, IncomingMessage, ServerResponse } from "http";
 import * as crypto from "crypto";
-import * as fs from "fs/promises";
+import * as fs from "fs";
 import * as path from "path";
+import dotenv from "dotenv";
+import { createClient } from "@supabase/supabase-js";
+
+dotenv.config();
+
+const port = Number(process.env.PORT || 3000);
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_KEY = process.env.SUPABASE_KEY || "";
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error("❌ Missing SUPABASE_URL or SUPABASE_KEY in .env file!");
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const publicDir = path.join(__dirname, "..", "public");
+const dataDir = path.join(__dirname, "..", ".data");
+const uploadsDir = path.join(dataDir, "uploads");
+const sessionCookie = "fj_session";
+
+const maxBodyBytes = 10 * 1024 * 1024;
+const maxUploadBytes = 8 * 1024 * 1024;
 
 type User = {
   id: string;
@@ -9,12 +31,6 @@ type User = {
   email: string;
   salt: string;
   passwordHash: string;
-  createdAt: string;
-};
-
-type Session = {
-  token: string;
-  userId: string;
   createdAt: string;
 };
 
@@ -53,54 +69,10 @@ type Trade = {
   createdAt: string;
 };
 
-type Db = {
-  users: User[];
-  sessions: Session[];
-  trades: Trade[];
-};
-
 type AuthedRequest = {
-  db: Db;
   user: User;
   token: string;
 };
-
-const port = Number(process.env.PORT || 3000);
-const publicDir = path.join(__dirname, "..", "public");
-const dataDir = path.join(__dirname, "..", ".data");
-const dbFile = path.join(dataDir, "db.json");
-const uploadsDir = path.join(dataDir, "uploads");
-const sessionCookie = "fj_session";
-// 10MB to accommodate base64-encoded screenshot uploads alongside normal JSON bodies.
-const maxBodyBytes = 10 * 1024 * 1024;
-const maxUploadBytes = 8 * 1024 * 1024;
-
-function emptyDb(): Db {
-  return { users: [], sessions: [], trades: [] };
-}
-
-async function readDb(): Promise<Db> {
-  await fs.mkdir(dataDir, { recursive: true });
-
-  try {
-    const raw = await fs.readFile(dbFile, "utf8");
-    const parsed = JSON.parse(raw) as Partial<Db>;
-    return {
-      users: Array.isArray(parsed.users) ? parsed.users : [],
-      sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
-      trades: Array.isArray(parsed.trades) ? parsed.trades : []
-    };
-  } catch {
-    const db = emptyDb();
-    await writeDb(db);
-    return db;
-  }
-}
-
-async function writeDb(db: Db): Promise<void> {
-  await fs.mkdir(dataDir, { recursive: true });
-  await fs.writeFile(dbFile, JSON.stringify(db, null, 2));
-}
 
 function makeId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${crypto.randomBytes(6).toString("hex")}`;
@@ -165,13 +137,12 @@ function readBody(req: IncomingMessage): Promise<unknown> {
     const chunks: Uint8Array[] = [];
     let size = 0;
 
-    req.on("data", (chunk) => {
+    req.on("data", (chunk: Uint8Array) => {
       size += chunk.length;
       if (size > maxBodyBytes) {
         reject(new Error("Request body is too large"));
         return;
       }
-
       chunks.push(chunk);
     });
 
@@ -217,14 +188,24 @@ async function requireAuth(req: IncomingMessage): Promise<AuthedRequest | null> 
   const token = cookies[sessionCookie];
   if (!token) return null;
 
-  const db = await readDb();
-  const session = db.sessions.find((item) => item.token === token);
-  if (!session) return null;
+  const { data: session } = await supabase
+    .from("sessions")
+    .select("*, users(*)")
+    .eq("token", token)
+    .single();
 
-  const user = db.users.find((item) => item.id === session.userId);
-  if (!user) return null;
+  if (!session || !session.users) return null;
 
-  return { db, user, token };
+  const user: User = {
+    id: session.users.id,
+    name: session.users.name,
+    email: session.users.email,
+    salt: session.users.salt,
+    passwordHash: session.users.password_hash,
+    createdAt: session.users.created_at
+  };
+
+  return { user, token };
 }
 
 async function handleSignup(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -248,32 +229,49 @@ async function handleSignup(req: IncomingMessage, res: ServerResponse): Promise<
     return;
   }
 
-  const db = await readDb();
-  if (db.users.some((user) => user.email === email)) {
+  const { data: existingUser } = await supabase.from("users").select("id").eq("email", email).single();
+  if (existingUser) {
     sendError(res, 409, "That email is already registered.");
     return;
   }
 
   const passwordData = createPasswordHash(password);
-  const user: User = {
-    id: makeId("usr"),
-    name,
-    email,
-    salt: passwordData.salt,
-    passwordHash: passwordData.passwordHash,
-    createdAt: new Date().toISOString()
-  };
-  const session: Session = {
-    token: crypto.randomBytes(32).toString("hex"),
-    userId: user.id,
-    createdAt: new Date().toISOString()
-  };
+  const userId = makeId("usr");
+  const createdAt = new Date().toISOString();
 
-  db.users.push(user);
-  db.sessions.push(session);
-  await writeDb(db);
+  const { error: userError } = await supabase.from("users").insert([
+    {
+      id: userId,
+      name,
+      email,
+      salt: passwordData.salt,
+      password_hash: passwordData.passwordHash,
+      created_at: createdAt
+    }
+  ]);
 
-  setSessionCookie(res, session.token);
+  if (userError) {
+    sendError(res, 500, "Failed to create user profile.");
+    return;
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const { error: sessionError } = await supabase.from("sessions").insert([
+    {
+      token,
+      user_id: userId,
+      created_at: createdAt
+    }
+  ]);
+
+  if (sessionError) {
+    sendError(res, 500, "Failed to create session.");
+    return;
+  }
+
+  const user: User = { id: userId, name, email, salt: passwordData.salt, passwordHash: passwordData.passwordHash, createdAt };
+
+  setSessionCookie(res, token);
   sendJson(res, 201, { user: publicUser(user) });
 }
 
@@ -281,24 +279,38 @@ async function handleLogin(req: IncomingMessage, res: ServerResponse): Promise<v
   const body = (await readBody(req)) as Record<string, unknown>;
   const email = toText(body.email).toLowerCase();
   const password = toText(body.password);
-  const db = await readDb();
-  const user = db.users.find((item) => item.email === email);
 
-  if (!user || !verifyPassword(password, user)) {
+  const { data: rawUser } = await supabase.from("users").select("*").eq("email", email).single();
+
+  if (!rawUser) {
     sendError(res, 401, "Incorrect email or password.");
     return;
   }
 
-  const session: Session = {
-    token: crypto.randomBytes(32).toString("hex"),
-    userId: user.id,
-    createdAt: new Date().toISOString()
+  const user: User = {
+    id: rawUser.id,
+    name: rawUser.name,
+    email: rawUser.email,
+    salt: rawUser.salt,
+    passwordHash: rawUser.password_hash,
+    createdAt: rawUser.created_at
   };
 
-  db.sessions.push(session);
-  await writeDb(db);
+  if (!verifyPassword(password, user)) {
+    sendError(res, 401, "Incorrect email or password.");
+    return;
+  }
 
-  setSessionCookie(res, session.token);
+  const token = crypto.randomBytes(32).toString("hex");
+  await supabase.from("sessions").insert([
+    {
+      token,
+      user_id: user.id,
+      created_at: new Date().toISOString()
+    }
+  ]);
+
+  setSessionCookie(res, token);
   sendJson(res, 200, { user: publicUser(user) });
 }
 
@@ -307,9 +319,7 @@ async function handleLogout(req: IncomingMessage, res: ServerResponse): Promise<
   const token = cookies[sessionCookie];
 
   if (token) {
-    const db = await readDb();
-    db.sessions = db.sessions.filter((session) => session.token !== token);
-    await writeDb(db);
+    await supabase.from("sessions").delete().eq("token", token);
   }
 
   clearSessionCookie(res);
@@ -320,10 +330,11 @@ async function handleCreateTrade(req: IncomingMessage, res: ServerResponse, auth
   const body = (await readBody(req)) as Record<string, unknown>;
   const direction = body.direction === "sell" ? "sell" : "buy";
   const result = body.result === "loss" ? "loss" : body.result === "breakeven" ? "breakeven" : "win";
+  const screenshots = toScreenshots(body.screenshots);
 
-  const trade: Trade = {
+  const tradeData = {
     id: makeId("trd"),
-    userId: auth.user.id,
+    user_id: auth.user.id,
     date: toText(body.date),
     time: toText(body.time),
     pair: toText(body.pair),
@@ -331,60 +342,118 @@ async function handleCreateTrade(req: IncomingMessage, res: ServerResponse, auth
     direction,
     result,
     setup: toText(body.setup),
-    entryPrice: toNumber(body.entryPrice),
-    stopLoss: toNumber(body.stopLoss),
-    takeProfit: toNumber(body.takeProfit),
-    lotSize: toNumber(body.lotSize),
-    riskPercent: toNumber(body.riskPercent),
-    plannedRr: toNumber(body.plannedRr),
-    rrAchieved: toText(body.rrAchieved),
-    pips: toNumber(body.pips),
+    entry_price: toNumber(body.entryPrice),
+    stop_loss: toNumber(body.stopLoss),
+    take_profit: toNumber(body.takeProfit),
+    risk_percent: toNumber(body.riskPercent),
+    planned_rr: toNumber(body.plannedRr),
     pnl: toNumber(body.pnl) || 0,
-    emotion: toText(body.emotion),
-    sleepQuality: toText(body.sleepQuality),
-    confidence: toText(body.confidence),
+    mood: toText(body.emotion),
     rating: Math.max(1, Math.min(5, toNumber(body.rating) || 3)),
-    preTradeNotes: toText(body.preTradeNotes),
     notes: toText(body.notes),
-    screenshots: toScreenshots(body.screenshots),
-    createdAt: new Date().toISOString()
+    created_at: new Date().toISOString()
   };
 
-  if (!trade.date || !trade.pair || !trade.setup) {
+  if (!tradeData.date || !tradeData.pair || !tradeData.setup) {
     sendError(res, 400, "Date, pair, and setup are required.");
     return;
   }
 
-  auth.db.trades.push(trade);
-  await writeDb(auth.db);
+  const { data, error } = await supabase.from("trades").insert([tradeData]).select().single();
+
+  if (error) {
+    console.error(error);
+    sendError(res, 500, "Failed to save trade.");
+    return;
+  }
+
+  const trade: Trade = {
+    id: data.id,
+    userId: data.user_id,
+    date: data.date,
+    time: data.time || "",
+    pair: data.pair,
+    session: data.session || "",
+    direction: data.direction,
+    result: data.result,
+    setup: data.setup,
+    entryPrice: data.entry_price,
+    stopLoss: data.stop_loss,
+    takeProfit: data.take_profit,
+    lotSize: toNumber(body.lotSize),
+    riskPercent: data.risk_percent,
+    plannedRr: data.planned_rr,
+    rrAchieved: toText(body.rrAchieved),
+    pips: toNumber(body.pips),
+    pnl: data.pnl,
+    emotion: data.mood || "",
+    sleepQuality: toText(body.sleepQuality),
+    confidence: toText(body.confidence),
+    rating: data.rating,
+    preTradeNotes: toText(body.preTradeNotes),
+    notes: data.notes || "",
+    screenshots,
+    createdAt: data.created_at
+  };
 
   sendJson(res, 201, { trade });
 }
 
 async function handleTrades(req: IncomingMessage, res: ServerResponse, auth: AuthedRequest): Promise<void> {
-  const trades = auth.db.trades
-    .filter((trade) => trade.userId === auth.user.id)
-    .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+  const { data: dbTrades, error } = await supabase
+    .from("trades")
+    .select("*")
+    .eq("user_id", auth.user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    sendError(res, 500, "Failed to fetch trades.");
+    return;
+  }
+
+  const trades: Trade[] = (dbTrades || []).map((t) => ({
+    id: t.id,
+    userId: t.user_id,
+    date: t.date,
+    time: t.time || "",
+    pair: t.pair,
+    session: t.session || "",
+    direction: t.direction,
+    result: t.result,
+    setup: t.setup,
+    entryPrice: t.entry_price,
+    stopLoss: t.stop_loss,
+    takeProfit: t.take_profit,
+    lotSize: null,
+    riskPercent: t.risk_percent,
+    plannedRr: t.planned_rr,
+    rrAchieved: "",
+    pips: null,
+    pnl: t.pnl || 0,
+    emotion: t.mood || "",
+    sleepQuality: "",
+    confidence: "",
+    rating: t.rating || 3,
+    preTradeNotes: "",
+    notes: t.notes || "",
+    screenshots: { before: null, after: null, analysis: null },
+    createdAt: t.created_at
+  }));
 
   sendJson(res, 200, { trades });
 }
 
 async function handleDeleteTrade(res: ServerResponse, auth: AuthedRequest, id: string): Promise<void> {
-  const target = auth.db.trades.find((trade) => trade.id === id && trade.userId === auth.user.id);
+  const { error } = await supabase
+    .from("trades")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", auth.user.id);
 
-  if (!target) {
-    sendError(res, 404, "Trade not found.");
+  if (error) {
+    sendError(res, 500, "Failed to delete trade.");
     return;
   }
-
-  auth.db.trades = auth.db.trades.filter((trade) => trade.id !== id);
-  await writeDb(auth.db);
-
-  await Promise.all(
-    Object.values(target.screenshots)
-      .filter((url): url is string => Boolean(url))
-      .map((url) => removeUploadedFile(url).catch(() => undefined))
-  );
 
   sendJson(res, 200, { ok: true });
 }
@@ -396,12 +465,6 @@ function extensionForMime(mime: string): string | null {
     "image/webp": "webp"
   };
   return map[mime] || null;
-}
-
-async function removeUploadedFile(url: string): Promise<void> {
-  const filename = url.replace("/api/uploads/", "");
-  if (!/^[a-zA-Z0-9_-]+\.(png|jpg|jpeg|webp)$/.test(filename)) return;
-  await fs.unlink(path.join(uploadsDir, filename));
 }
 
 async function handleUploadCreate(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -427,9 +490,9 @@ async function handleUploadCreate(req: IncomingMessage, res: ServerResponse): Pr
     return;
   }
 
-  await fs.mkdir(uploadsDir, { recursive: true });
+  await fs.promises.mkdir(uploadsDir, { recursive: true });
   const filename = `${makeId("shot")}.${ext}`;
-  await fs.writeFile(path.join(uploadsDir, filename), buffer);
+  await fs.promises.writeFile(path.join(uploadsDir, filename), buffer);
 
   sendJson(res, 201, { url: `/api/uploads/${filename}` });
 }
@@ -522,7 +585,7 @@ function mimeType(filePath: string): string {
 }
 
 async function serveFile(res: ServerResponse, filePath: string): Promise<void> {
-  const file = await fs.readFile(filePath);
+  const file = await fs.promises.readFile(filePath);
   res.statusCode = 200;
   res.setHeader("Content-Type", mimeType(filePath));
   res.end(file);
@@ -543,7 +606,7 @@ async function serveStatic(res: ServerResponse, pathname: string): Promise<void>
   }
 
   try {
-    const info = await fs.stat(target);
+    const info = await fs.promises.stat(target);
     if (!info.isFile()) throw new Error("Not a file");
     await serveFile(res, target);
   } catch {
@@ -556,20 +619,22 @@ async function serveStatic(res: ServerResponse, pathname: string): Promise<void>
   }
 }
 
-const server = createServer(async (req, res) => {
-  try {
-    const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+  (async () => {
+    try {
+      const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
-    if (requestUrl.pathname.startsWith("/api/")) {
-      await handleApi(req, res, requestUrl.pathname);
-      return;
+      if (requestUrl.pathname.startsWith("/api/")) {
+        await handleApi(req, res, requestUrl.pathname);
+        return;
+      }
+
+      await serveStatic(res, requestUrl.pathname);
+    } catch (error) {
+      console.error(error);
+      sendError(res, 500, error instanceof Error ? error.message : "Server error.");
     }
-
-    await serveStatic(res, requestUrl.pathname);
-  } catch (error) {
-    console.error(error);
-    sendError(res, 500, error instanceof Error ? error.message : "Server error.");
-  }
+  })();
 });
 
 server.listen(port, () => {
