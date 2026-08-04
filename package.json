@@ -10,7 +10,13 @@
     "start": "node dist/server.js"
   },
   "devDependencies": {
+    "@types/node": "^26.1.2",
     "esbuild": "^0.28.1",
     "tsx": "^4.23.5"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.0",
+    "dotenv": "^17.4.2",
+    "typescript": "^7.0.2"
   }
 }
