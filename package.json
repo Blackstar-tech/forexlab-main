@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx --watch src/server.ts",
     "build:client": "esbuild src/client.ts --bundle --outfile=public/client.js",
-    "build": "npm run build:client",
+    "build": "tsc && npm run build:client",
     "start": "node dist/server.js"
   },
   "devDependencies": {
@@ -17,6 +17,6 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.112.0",
     "dotenv": "^17.4.2",
-    "typescript": "^7.0.2"
+    "typescript": "^6.0.3"
   }
 }
