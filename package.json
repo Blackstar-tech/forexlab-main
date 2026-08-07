@@ -7,7 +7,7 @@
     "dev": "tsx --watch src/server.ts",
     "build:client": "esbuild src/client.ts --bundle --outfile=public/client.js",
     "build": "tsc && npm run build:client",
-    "start": "node dist/server.js"
+    "start": "node dist/src/server.js"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
