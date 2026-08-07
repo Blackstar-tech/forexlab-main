@@ -4,18 +4,37 @@ import * as fs from "fs";
 import * as path from "path";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import nodemailer from "nodemailer";
 
 dotenv.config();
 
 const port = Number(process.env.PORT || 3000);
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_KEY || "";
+const GMAIL_USER = process.env.GMAIL_USER || "";
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || "";
+const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || "Forex Lab";
+const APP_URL = process.env.APP_URL || "";
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("❌ Missing SUPABASE_URL or SUPABASE_KEY in .env file!");
 }
 
+if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+  console.warn("⚠️  Missing GMAIL_USER or GMAIL_APP_PASSWORD in .env file — signup emails will be skipped.");
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const mailTransporter =
+  GMAIL_USER && GMAIL_APP_PASSWORD
+    ? nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: GMAIL_USER,
+          pass: GMAIL_APP_PASSWORD
+        }
+      })
+    : null;
 
 const publicDir = path.join(__dirname, "..", "public");
 const dataDir = path.join(__dirname, "..", ".data");
@@ -98,6 +117,85 @@ function publicUser(user: User) {
     name: user.name,
     email: user.email
   };
+}
+
+function titleCase(value: string): string {
+  return value
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function welcomeEmailHtml(name: string): string {
+  const safeName = titleCase(name.replace(/[<>&]/g, ""));
+  const appUrl = APP_URL || "#";
+
+  return `
+    <div style="background: #f4f6f8; padding: 32px 16px; font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e9ed;">
+        <tr>
+          <td style="padding: 28px 32px 0;">
+            <table role="presentation" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="width: 40px; height: 40px; background: #2dd4bf; border-radius: 8px; text-align: center; vertical-align: middle; font-family: Georgia, serif; font-weight: 700; font-size: 15px; color: #04100f;">FL</td>
+                <td style="padding-left: 10px; font-size: 13px; color: #7c8791; font-weight: 600; letter-spacing: 0.02em;">FOREX LAB &middot; JOURNAL</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 24px 32px 0;">
+            <h1 style="margin: 0 0 12px; font-size: 22px; line-height: 1.3; color: #0f1216;">Welcome, ${safeName}.</h1>
+            <p style="margin: 0 0 24px; font-size: 14px; line-height: 1.65; color: #4a535c;">
+              Your trading journal is ready. Log setups, track the psychology behind each trade, and review your P&amp;L whenever you're ready to get started.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 0 32px 32px;">
+            <table role="presentation" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="border-radius: 8px; background: #2dd4bf;">
+                  <a href="${appUrl}" style="display: inline-block; padding: 12px 22px; font-size: 14px; font-weight: 700; color: #04100f; text-decoration: none;">Open your journal &rarr;</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 20px 32px; background: #f9fafb; border-top: 1px solid #eef1f4;">
+            <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #9aa3ab;">
+              You're receiving this because an account was just created with this email address at Forex Lab. If this wasn't you, you can ignore this message.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
+// Fire-and-forget welcome email. Failures are logged but never block or fail the signup request itself —
+// a missing/expired email provider key or a transient send error shouldn't prevent someone from signing up.
+// NOTE: this only sends a welcome email today. To add email *verification* later, generate a token here,
+// store it (e.g. a `verification_token` + `email_verified` column on `users`), include a confirmation link
+// in this email, add a `GET /api/verify?token=...` route to mark the user verified, and gate login/features
+// on `email_verified` once you're ready to enforce it.
+async function sendWelcomeEmail(user: { name: string; email: string }): Promise<void> {
+  if (!mailTransporter) return;
+
+  try {
+    await mailTransporter.sendMail({
+      from: `"${MAIL_FROM_NAME}" <${GMAIL_USER}>`,
+      to: user.email,
+      subject: "Welcome to Forex Lab",
+      html: welcomeEmailHtml(user.name)
+    });
+  } catch (error) {
+    // Never let a slow/failed email provider break signup — log it and move on.
+    console.error("Welcome email failed to send:", error);
+  }
 }
 
 function sendJson(res: ServerResponse, status: number, payload: unknown): void {
@@ -266,6 +364,8 @@ async function handleSignup(req: IncomingMessage, res: ServerResponse): Promise<
   }
 
   const user: User = { id: userId, name, email, salt: passwordData.salt, passwordHash: passwordData.passwordHash, createdAt };
+
+  await sendWelcomeEmail({ name: user.name, email: user.email });
 
   setSessionCookie(res, token);
   sendJson(res, 201, { user: publicUser(user) });
@@ -488,7 +588,7 @@ async function handleUploadCreate(req: IncomingMessage, res: ServerResponse): Pr
 
   await fs.promises.mkdir(uploadsDir, { recursive: true });
   const filename = `${makeId("shot")}.${ext}`;
-  await fs.promises.writeFile(path.join(uploadsDir, filename), new Uint8Array(buffer));
+  await fs.promises.writeFile(path.join(uploadsDir, filename), buffer);
 
   sendJson(res, 201, { url: `/api/uploads/${filename}` });
 }
@@ -615,24 +715,28 @@ async function serveStatic(res: ServerResponse, pathname: string): Promise<void>
   }
 }
 
-const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-  (async () => {
-    try {
-      const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+export async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  try {
+    const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
-      if (requestUrl.pathname.startsWith("/api/")) {
-        await handleApi(req, res, requestUrl.pathname);
-        return;
-      }
-
-      await serveStatic(res, requestUrl.pathname);
-    } catch (error) {
-      console.error(error);
-      sendError(res, 500, error instanceof Error ? error.message : "Server error.");
+    if (requestUrl.pathname.startsWith("/api/")) {
+      await handleApi(req, res, requestUrl.pathname);
+      return;
     }
-  })();
-});
 
-server.listen(port, () => {
-  console.log(`Trade journal running at http://localhost:${port}`);
-});
+    await serveStatic(res, requestUrl.pathname);
+  } catch (error) {
+    console.error(error);
+    sendError(res, 500, error instanceof Error ? error.message : "Server error.");
+  }
+}
+
+// Only start a real listening server when running locally (e.g. `ts-node src/server.ts`).
+// On Vercel, this file is imported by api/index.ts instead — no .listen() needed there.
+if (require.main === module) {
+  createServer((req, res) => {
+    handleRequest(req, res);
+  }).listen(port, () => {
+    console.log(`Trade journal running at http://localhost:${port}`);
+  });
+}

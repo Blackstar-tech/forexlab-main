@@ -10,13 +10,15 @@
     "start": "node dist/server.js"
   },
   "devDependencies": {
-    "@types/node": "^26.1.2",
+    "@types/node": "^24.0.0",
+    "@types/nodemailer": "^8.0.1",
     "esbuild": "^0.28.1",
     "tsx": "^4.23.5"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.0",
     "dotenv": "^17.4.2",
+    "nodemailer": "^9.0.4",
     "typescript": "^6.0.3"
   }
 }
