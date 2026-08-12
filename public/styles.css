@@ -1718,3 +1718,87 @@ td {
   border: 1px solid var(--line);
   object-fit: contain;
 }
+
+/* ---------- Polish pass: scrollbar, empty states, micro-interactions ---------- */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+  background-color: rgb(var(--color-accent-rgb) / 0.25);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--color-accent-rgb) / 0.45);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--color-accent-rgb) / 0.3) transparent;
+}
+
+.empty-row,
+.monthly-empty,
+.empty-chart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 42px 20px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-white-rgb) / 0.018);
+  color: var(--muted);
+  font-family: var(--font-body);
+  text-align: center;
+}
+
+.empty-row::before,
+.monthly-empty::before,
+.empty-chart::before {
+  content: "◈";
+  color: var(--accent);
+  font-size: 22px;
+  opacity: 0.7;
+}
+
+.badge,
+.tag-pill {
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.badge:hover {
+  transform: translateY(-1px);
+}
+
+.badge.buy:hover,
+.badge.win:hover {
+  box-shadow: 0 6px 18px rgb(var(--color-profit-rgb) / 0.22);
+}
+
+.badge.sell:hover,
+.badge.loss:hover {
+  box-shadow: 0 6px 18px rgb(var(--color-loss-rgb) / 0.22);
+}
+
+.monthly-day.is-profit:hover {
+  box-shadow: 0 10px 26px rgb(var(--color-profit-rgb) / 0.18);
+}
+
+.monthly-day.is-loss:hover {
+  box-shadow: 0 10px 26px rgb(var(--color-loss-rgb) / 0.18);
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--color-accent-rgb) / 0.65);
+  outline-offset: 2px;
+}
