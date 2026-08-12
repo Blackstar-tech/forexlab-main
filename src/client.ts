@@ -78,6 +78,13 @@ const state: {
   resetToken: ""
 };
 
+type CustomSelect = {
+  root: HTMLDivElement;
+  select: HTMLSelectElement;
+  trigger: HTMLButtonElement;
+  menu: HTMLDivElement;
+};
+
 function qs<T extends HTMLElement>(selector: string, root: Document | HTMLElement = document): T {
   const element = root.querySelector<T>(selector);
   if (!element) throw new Error(`Missing element: ${selector}`);
@@ -322,6 +329,7 @@ function removeShot(): void {
 
 function resetTradeForm(): void {
   qs<HTMLFormElement>("#tradeForm").reset();
+  syncAllCustomSelects();
   state.direction = "buy";
   state.result = "win";
   state.rating = 3;
@@ -475,7 +483,7 @@ function renderHistory(): void {
     const row = document.createElement("tr");
     row.append(
       tableCell(trade.date),
-      tableCell(trade.pair),
+      tradeSummaryCell(trade),
       badgeCell(trade.direction, trade.direction),
       badgeCell(trade.result, trade.result),
       tableCell(currency(trade.pnl), trade.pnl >= 0 ? "positive" : "negative"),
@@ -485,6 +493,34 @@ function renderHistory(): void {
     );
     tbody.append(row);
   });
+}
+
+function tradeSummaryCell(trade: Trade): HTMLTableCellElement {
+  const cell = document.createElement("td");
+  cell.className = "trade-summary-cell";
+
+  const summary = document.createElement("div");
+  summary.className = "trade-summary";
+
+  const pair = document.createElement("strong");
+  pair.textContent = trade.pair;
+
+  const tags = document.createElement("div");
+  tags.className = "trade-tags";
+
+  if (trade.session) tags.append(tagPill(trade.session, "session"));
+  if (trade.setup) tags.append(tagPill(trade.setup, "setup"));
+
+  summary.append(pair, tags);
+  cell.append(summary);
+  return cell;
+}
+
+function tagPill(text: string, tone: string): HTMLSpanElement {
+  const tag = document.createElement("span");
+  tag.className = `tag-pill ${tone}`;
+  tag.textContent = text;
+  return tag;
 }
 
 function tableCell(text: string, className = ""): HTMLTableCellElement {
@@ -512,6 +548,129 @@ function actionCell(id: string): HTMLTableCellElement {
   button.textContent = "Delete";
   cell.append(button);
   return cell;
+}
+
+function syncCustomSelect(custom: CustomSelect): void {
+  const selected = custom.select.selectedOptions[0];
+  custom.trigger.textContent = selected?.textContent || "Select";
+
+  qsa<HTMLButtonElement>(".select-option", custom.menu).forEach((option) => {
+    const isSelected = option.dataset.value === custom.select.value;
+    option.setAttribute("aria-selected", String(isSelected));
+  });
+}
+
+function closeCustomSelect(custom: CustomSelect): void {
+  custom.root.classList.remove("is-open");
+  custom.trigger.setAttribute("aria-expanded", "false");
+}
+
+function closeOtherSelects(active: CustomSelect): void {
+  qsa<HTMLDivElement>(".custom-select.is-open").forEach((root) => {
+    if (root !== active.root) {
+      root.classList.remove("is-open");
+      root.querySelector<HTMLButtonElement>(".select-trigger")?.setAttribute("aria-expanded", "false");
+    }
+  });
+}
+
+function createCustomSelect(select: HTMLSelectElement): CustomSelect {
+  select.classList.add("native-select");
+  select.tabIndex = -1;
+
+  const root = document.createElement("div");
+  root.className = "custom-select";
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "select-trigger";
+  trigger.setAttribute("aria-haspopup", "listbox");
+  trigger.setAttribute("aria-expanded", "false");
+
+  const menu = document.createElement("div");
+  menu.className = "select-menu";
+  menu.setAttribute("role", "listbox");
+
+  Array.from(select.options).forEach((nativeOption) => {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "select-option";
+    option.dataset.value = nativeOption.value;
+    option.setAttribute("role", "option");
+    option.textContent = nativeOption.textContent || "";
+    option.addEventListener("click", () => {
+      select.value = nativeOption.value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      syncCustomSelect(custom);
+      closeCustomSelect(custom);
+      trigger.focus();
+    });
+    menu.append(option);
+  });
+
+  select.after(root);
+  root.append(select, trigger, menu);
+
+  const custom = { root, select, trigger, menu };
+
+  trigger.addEventListener("click", () => {
+    const willOpen = !root.classList.contains("is-open");
+    closeOtherSelects(custom);
+    root.classList.toggle("is-open", willOpen);
+    trigger.setAttribute("aria-expanded", String(willOpen));
+  });
+
+  trigger.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      closeOtherSelects(custom);
+      root.classList.add("is-open");
+      trigger.setAttribute("aria-expanded", "true");
+      menu.querySelector<HTMLButtonElement>(".select-option")?.focus();
+    }
+  });
+
+  menu.addEventListener("keydown", (event) => {
+    const options = qsa<HTMLButtonElement>(".select-option", menu);
+    const currentIndex = options.indexOf(document.activeElement as HTMLButtonElement);
+
+    if (event.key === "Escape") {
+      closeCustomSelect(custom);
+      trigger.focus();
+      return;
+    }
+
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+
+    event.preventDefault();
+    const direction = event.key === "ArrowDown" ? 1 : -1;
+    const nextIndex = (currentIndex + direction + options.length) % options.length;
+    options[nextIndex]?.focus();
+  });
+
+  select.addEventListener("change", () => syncCustomSelect(custom));
+  syncCustomSelect(custom);
+  return custom;
+}
+
+function initCustomSelects(): void {
+  qsa<HTMLSelectElement>("select").forEach((select) => createCustomSelect(select));
+
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    qsa<HTMLDivElement>(".custom-select.is-open").forEach((root) => {
+      if (!root.contains(target)) {
+        root.classList.remove("is-open");
+        root.querySelector<HTMLButtonElement>(".select-trigger")?.setAttribute("aria-expanded", "false");
+      }
+    });
+  });
+}
+
+function syncAllCustomSelects(): void {
+  qsa<HTMLSelectElement>("select").forEach((select) => {
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 }
 
 function renderAnalytics(): void {
@@ -987,6 +1146,7 @@ function bindEvents(): void {
 
 async function init(): Promise<void> {
   bindEvents();
+  initCustomSelects();
   setSegment("direction", state.direction);
   setSegment("result", state.result);
   setSegment("emotion", state.emotion);
