@@ -236,6 +236,83 @@ async function sendWelcomeEmail(user: { name: string; email: string }): Promise<
   }
 }
 
+function passwordResetEmailHtml(name: string, resetLink: string): string {
+  const safeName = titleCase(name.replace(/[<>&]/g, ""));
+
+  return `
+    <div style="background: #f4f6f8; padding: 32px 16px; font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e9ed;">
+        <tr>
+          <td style="padding: 28px 32px 0;">
+            <table role="presentation" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="width: 40px; height: 40px; background: #2dd4bf; border-radius: 8px; text-align: center; vertical-align: middle; font-family: Georgia, serif; font-weight: 700; font-size: 15px; color: #04100f;">FL</td>
+                <td style="padding-left: 10px; font-size: 13px; color: #7c8791; font-weight: 600; letter-spacing: 0.02em;">FOREX LAB &middot; PASSWORD RESET</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 24px 32px 0;">
+            <h1 style="margin: 0 0 12px; font-size: 22px; line-height: 1.3; color: #0f1216;">Reset your password, ${safeName}.</h1>
+            <p style="margin: 0 0 24px; font-size: 14px; line-height: 1.65; color: #4a535c;">
+              Someone requested a password reset for your Forex Lab account. Use the link below to set a new password. This link expires in 1 hour.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 0 32px 32px;">
+            <table role="presentation" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="border-radius: 8px; background: #2dd4bf;">
+                  <a href="${resetLink}" style="display: inline-block; padding: 12px 22px; font-size: 14px; font-weight: 700; color: #04100f; text-decoration: none;">Set a new password &rarr;</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 20px 32px; background: #f9fafb; border-top: 1px solid #eef1f4;">
+            <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #9aa3ab;">
+              If you didn't request this password reset, you can ignore this email.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
+function passwordResetEmailText(name: string, resetLink: string): string {
+  const safeName = titleCase(name.replace(/[<>&]/g, ""));
+
+  return `Hi ${safeName},
+
+Someone requested a password reset for your Forex Lab account. Use the link below to set a new password. This link expires in 1 hour.
+
+Set a new password: ${resetLink}
+
+If you didn't request this password reset, you can ignore this email.`;
+}
+
+async function sendPasswordResetEmail(user: { name: string; email: string }, token: string): Promise<void> {
+  if (!mailTransporter) return;
+
+  const resetLink = `${APP_URL}/reset-password?token=${token}`;
+
+  try {
+    await mailTransporter.sendMail({
+      from: `"${MAIL_FROM_NAME}" <${GMAIL_USER}>`,
+      to: user.email,
+      subject: "Reset your Forex Lab password",
+      text: passwordResetEmailText(user.name, resetLink),
+      html: passwordResetEmailHtml(user.name, resetLink)
+    });
+  } catch (error) {
+    console.error("Password reset email failed to send:", error);
+  }
+}
+
 function sendJson(res: ServerResponse, status: number, payload: unknown): void {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -448,6 +525,107 @@ async function handleLogin(req: IncomingMessage, res: ServerResponse): Promise<v
 
   setSessionCookie(res, token);
   sendJson(res, 200, { user: publicUser(user) });
+}
+
+async function handleForgotPassword(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const body = (await readBody(req)) as Record<string, unknown>;
+  const email = toText(body.email).toLowerCase();
+  const response = { ok: true, message: "If that email is registered, a reset link has been sent." };
+
+  if (!email || !email.includes("@")) {
+    sendJson(res, 200, response);
+    return;
+  }
+
+  const { data: rawUser } = await getSupabase().from("users").select("*").eq("email", email).single();
+
+  if (!rawUser) {
+    sendJson(res, 200, response);
+    return;
+  }
+
+  const user: User = {
+    id: rawUser.id,
+    name: rawUser.name,
+    email: rawUser.email,
+    salt: rawUser.salt,
+    passwordHash: rawUser.password_hash,
+    createdAt: rawUser.created_at
+  };
+  const token = crypto.randomBytes(32).toString("hex");
+  const createdAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+  const { error } = await getSupabase().from("password_resets").insert([
+    {
+      token,
+      user_id: user.id,
+      expires_at: expiresAt,
+      used: false,
+      created_at: createdAt
+    }
+  ]);
+
+  if (error) {
+    console.error("Supabase password reset insert failed:", error);
+    sendJson(res, 200, response);
+    return;
+  }
+
+  await sendPasswordResetEmail({ name: user.name, email: user.email }, token);
+  sendJson(res, 200, response);
+}
+
+async function handleResetPassword(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const body = (await readBody(req)) as Record<string, unknown>;
+  const token = toText(body.token);
+  const password = toText(body.password);
+
+  const { data: reset } = await getSupabase().from("password_resets").select("*").eq("token", token).single();
+  const expiresAt = reset?.expires_at ? new Date(reset.expires_at).getTime() : 0;
+
+  if (!reset || reset.used || !expiresAt || expiresAt <= Date.now()) {
+    sendError(res, 400, "Reset link is invalid or expired.");
+    return;
+  }
+
+  if (password.length < 6) {
+    sendError(res, 400, "Password must be at least 6 characters.");
+    return;
+  }
+
+  const passwordData = createPasswordHash(password);
+  const { error: userError } = await getSupabase()
+    .from("users")
+    .update({
+      salt: passwordData.salt,
+      password_hash: passwordData.passwordHash
+    })
+    .eq("id", reset.user_id);
+
+  if (userError) {
+    console.error("Supabase password update failed:", userError);
+    sendError(res, 500, "Failed to reset password.");
+    return;
+  }
+
+  const { error: resetError } = await getSupabase().from("password_resets").update({ used: true }).eq("token", token);
+
+  if (resetError) {
+    console.error("Supabase password reset token update failed:", resetError);
+    sendError(res, 500, "Failed to reset password.");
+    return;
+  }
+
+  const { error: sessionError } = await getSupabase().from("sessions").delete().eq("user_id", reset.user_id);
+
+  if (sessionError) {
+    console.error("Supabase session delete failed after password reset:", sessionError);
+    sendError(res, 500, "Failed to reset password.");
+    return;
+  }
+
+  sendJson(res, 200, { ok: true });
 }
 
 async function handleLogout(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -665,6 +843,16 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, pathname: st
 
   if (pathname === "/api/login" && method === "POST") {
     await handleLogin(req, res);
+    return;
+  }
+
+  if (pathname === "/api/forgot-password" && method === "POST") {
+    await handleForgotPassword(req, res);
+    return;
+  }
+
+  if (pathname === "/api/reset-password" && method === "POST") {
+    await handleResetPassword(req, res);
     return;
   }
 

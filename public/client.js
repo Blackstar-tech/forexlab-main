@@ -23,7 +23,8 @@
         sleepQuality: "",
         confidence: "",
         activeShot: "before",
-        screenshots: { before: null, after: null, analysis: null }
+        screenshots: { before: null, after: null, analysis: null },
+        resetToken: ""
       };
       function qs(selector, root = document) {
         const element = root.querySelector(selector);
@@ -42,11 +43,29 @@
           },
           ...options
         });
-        const data = await response.json();
+        const text = await response.text();
+        const contentType = response.headers.get("Content-Type") || "";
+        const isJson = contentType.toLowerCase().includes("application/json");
+        let data = {};
+        if (text && (isJson || text.trim().startsWith("{") || text.trim().startsWith("["))) {
+          try {
+            data = JSON.parse(text);
+          } catch {
+            throw new Error("The server returned invalid JSON.");
+          }
+        }
         if (!response.ok) {
-          throw new Error(data.error || "Request failed.");
+          throw new Error(data.error || httpErrorMessage(response.status));
+        }
+        if (!isJson) {
+          throw new Error("The API returned a non-JSON response. Check the Vercel API route.");
         }
         return data;
+      }
+      function httpErrorMessage(status) {
+        if (status === 405) return "The API route is not accepting this request. Check the Vercel routing.";
+        if (status >= 500) return "The server crashed while handling this request.";
+        return `Request failed (${status}).`;
       }
       function showToast(message) {
         const toast = qs("#toast");
@@ -63,25 +82,62 @@
         qs("#appView").removeAttribute("hidden");
         qs("#userName").textContent = state.user?.name || "Trader";
       }
+      function clearAuthMessages() {
+        qsa(".auth-message").forEach((message) => {
+          message.textContent = "";
+          message.classList.remove("is-error");
+          message.setAttribute("hidden", "true");
+        });
+      }
+      function setAuthMessage(selector, text, isError = false) {
+        const message = qs(selector);
+        message.textContent = text;
+        message.classList.toggle("is-error", isError);
+        message.removeAttribute("hidden");
+      }
       function setAuthMode(mode) {
         const loginForm = qs("#loginForm");
         const signupForm = qs("#signupForm");
+        const forgotPasswordForm = qs("#forgotPasswordForm");
+        const resetPasswordForm = qs("#resetPasswordForm");
+        const authToggle = qs(".auth-toggle");
         const title = qs("#authTitle");
         const subtitle = qs("#authSubtitle");
+        clearAuthMessages();
+        loginForm.setAttribute("hidden", "true");
+        signupForm.setAttribute("hidden", "true");
+        forgotPasswordForm.setAttribute("hidden", "true");
+        resetPasswordForm.setAttribute("hidden", "true");
+        authToggle.toggleAttribute("hidden", mode === "forgot" || mode === "reset");
         qsa("[data-auth-mode]").forEach((button) => {
           button.classList.toggle("is-active", button.dataset.authMode === mode);
         });
         if (mode === "login") {
           loginForm.removeAttribute("hidden");
-          signupForm.setAttribute("hidden", "true");
           title.textContent = "Welcome back";
           subtitle.textContent = "Sign in to review your trading journal.";
-        } else {
+        } else if (mode === "signup") {
           signupForm.removeAttribute("hidden");
-          loginForm.setAttribute("hidden", "true");
           title.textContent = "Create your journal";
           subtitle.textContent = "Start tracking trades with a private account.";
+        } else if (mode === "forgot") {
+          forgotPasswordForm.removeAttribute("hidden");
+          title.textContent = "Reset your password";
+          subtitle.textContent = "Enter your email and we'll send a reset link if the account exists.";
+        } else {
+          resetPasswordForm.removeAttribute("hidden");
+          title.textContent = "Set a new password";
+          subtitle.textContent = "Choose a fresh password for your Forex Lab account.";
         }
+      }
+      function resetTokenFromUrl() {
+        if (window.location.pathname !== "/reset-password") return "";
+        return new URLSearchParams(window.location.search).get("token") || "";
+      }
+      function returnToLogin() {
+        window.history.replaceState({}, "", "/");
+        state.resetToken = "";
+        setAuthMode("login");
       }
       function setTab(tab) {
         state.activeTab = tab;
@@ -544,6 +600,43 @@
         await loadTrades();
         showToast("Account created.");
       }
+      async function handleForgotPassword(event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const formData = new FormData(form);
+        const response = await api("/api/forgot-password", {
+          method: "POST",
+          body: JSON.stringify({
+            email: formData.get("email")
+          })
+        });
+        setAuthMessage("#forgotPasswordMessage", response.message || "If that email is registered, a reset link has been sent.");
+      }
+      async function handleResetPassword(event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const formData = new FormData(form);
+        const password = String(formData.get("password") || "");
+        const confirmPassword = String(formData.get("confirmPassword") || "");
+        if (!state.resetToken) {
+          setAuthMessage("#resetPasswordMessage", "Reset link is invalid or expired.", true);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setAuthMessage("#resetPasswordMessage", "Passwords do not match.", true);
+          return;
+        }
+        await api("/api/reset-password", {
+          method: "POST",
+          body: JSON.stringify({
+            token: state.resetToken,
+            password
+          })
+        });
+        form.reset();
+        setAuthMessage("#resetPasswordMessage", "Password updated. Redirecting to login...");
+        window.setTimeout(returnToLogin, 1400);
+      }
       async function handleTradeSave(event) {
         event.preventDefault();
         await api("/api/trades", {
@@ -652,6 +745,17 @@
         qs("#signupForm").addEventListener("submit", (event) => {
           handleSignup(event).catch((error) => showToast(error.message));
         });
+        qs("#forgotPasswordButton").addEventListener("click", () => setAuthMode("forgot"));
+        qs("#forgotBackButton").addEventListener("click", returnToLogin);
+        qs("#resetBackButton").addEventListener("click", returnToLogin);
+        qs("#forgotPasswordForm").addEventListener("submit", (event) => {
+          handleForgotPassword(event).catch((error) => showToast(error.message));
+        });
+        qs("#resetPasswordForm").addEventListener("submit", (event) => {
+          handleResetPassword(event).catch((error) => {
+            setAuthMessage("#resetPasswordMessage", error.message, true);
+          });
+        });
         qs("#tradeForm").addEventListener("submit", (event) => {
           handleTradeSave(event).catch((error) => showToast(error.message));
         });
@@ -678,7 +782,6 @@
       }
       async function init() {
         bindEvents();
-        setAuthMode("login");
         setSegment("direction", state.direction);
         setSegment("result", state.result);
         setSegment("emotion", state.emotion);
@@ -689,6 +792,14 @@
         setToday();
         updateRr();
         renderShotPreview();
+        if (window.location.pathname === "/reset-password") {
+          state.resetToken = resetTokenFromUrl();
+          showAuth();
+          setAuthMode("reset");
+          if (!state.resetToken) setAuthMessage("#resetPasswordMessage", "Reset link is invalid or expired.", true);
+          return;
+        }
+        setAuthMode("login");
         try {
           const response = await api("/api/me");
           state.user = response.user;

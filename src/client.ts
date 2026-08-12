@@ -44,6 +44,8 @@ type ApiError = {
   error?: string;
 };
 
+type AuthMode = "login" | "signup" | "forgot" | "reset";
+
 type JournalTab = "log" | "history" | "monthly" | "analytics";
 
 const state: {
@@ -59,6 +61,7 @@ const state: {
   confidence: string;
   activeShot: ShotTab;
   screenshots: TradeScreenshots;
+  resetToken: string;
 } = {
   user: null,
   trades: [],
@@ -71,7 +74,8 @@ const state: {
   sleepQuality: "",
   confidence: "",
   activeShot: "before",
-  screenshots: { before: null, after: null, analysis: null }
+  screenshots: { before: null, after: null, analysis: null },
+  resetToken: ""
 };
 
 function qs<T extends HTMLElement>(selector: string, root: Document | HTMLElement = document): T {
@@ -94,12 +98,34 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...options
   });
 
-  const data = (await response.json()) as T & ApiError;
+  const text = await response.text();
+  const contentType = response.headers.get("Content-Type") || "";
+  const isJson = contentType.toLowerCase().includes("application/json");
+  let data = {} as T & ApiError;
+
+  if (text && (isJson || text.trim().startsWith("{") || text.trim().startsWith("["))) {
+    try {
+      data = JSON.parse(text) as T & ApiError;
+    } catch {
+      throw new Error("The server returned invalid JSON.");
+    }
+  }
+
   if (!response.ok) {
-    throw new Error(data.error || "Request failed.");
+    throw new Error(data.error || httpErrorMessage(response.status));
+  }
+
+  if (!isJson) {
+    throw new Error("The API returned a non-JSON response. Check the Vercel API route.");
   }
 
   return data;
+}
+
+function httpErrorMessage(status: number): string {
+  if (status === 405) return "The API route is not accepting this request. Check the Vercel routing.";
+  if (status >= 500) return "The server crashed while handling this request.";
+  return `Request failed (${status}).`;
 }
 
 function showToast(message: string): void {
@@ -120,11 +146,36 @@ function showApp(): void {
   qs<HTMLSpanElement>("#userName").textContent = state.user?.name || "Trader";
 }
 
-function setAuthMode(mode: "login" | "signup"): void {
+function clearAuthMessages(): void {
+  qsa<HTMLDivElement>(".auth-message").forEach((message) => {
+    message.textContent = "";
+    message.classList.remove("is-error");
+    message.setAttribute("hidden", "true");
+  });
+}
+
+function setAuthMessage(selector: string, text: string, isError = false): void {
+  const message = qs<HTMLDivElement>(selector);
+  message.textContent = text;
+  message.classList.toggle("is-error", isError);
+  message.removeAttribute("hidden");
+}
+
+function setAuthMode(mode: AuthMode): void {
   const loginForm = qs<HTMLFormElement>("#loginForm");
   const signupForm = qs<HTMLFormElement>("#signupForm");
+  const forgotPasswordForm = qs<HTMLFormElement>("#forgotPasswordForm");
+  const resetPasswordForm = qs<HTMLFormElement>("#resetPasswordForm");
+  const authToggle = qs<HTMLDivElement>(".auth-toggle");
   const title = qs<HTMLHeadingElement>("#authTitle");
   const subtitle = qs<HTMLParagraphElement>("#authSubtitle");
+
+  clearAuthMessages();
+  loginForm.setAttribute("hidden", "true");
+  signupForm.setAttribute("hidden", "true");
+  forgotPasswordForm.setAttribute("hidden", "true");
+  resetPasswordForm.setAttribute("hidden", "true");
+  authToggle.toggleAttribute("hidden", mode === "forgot" || mode === "reset");
 
   qsa<HTMLButtonElement>("[data-auth-mode]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.authMode === mode);
@@ -132,15 +183,32 @@ function setAuthMode(mode: "login" | "signup"): void {
 
   if (mode === "login") {
     loginForm.removeAttribute("hidden");
-    signupForm.setAttribute("hidden", "true");
     title.textContent = "Welcome back";
     subtitle.textContent = "Sign in to review your trading journal.";
-  } else {
+  } else if (mode === "signup") {
     signupForm.removeAttribute("hidden");
-    loginForm.setAttribute("hidden", "true");
     title.textContent = "Create your journal";
     subtitle.textContent = "Start tracking trades with a private account.";
+  } else if (mode === "forgot") {
+    forgotPasswordForm.removeAttribute("hidden");
+    title.textContent = "Reset your password";
+    subtitle.textContent = "Enter your email and we'll send a reset link if the account exists.";
+  } else {
+    resetPasswordForm.removeAttribute("hidden");
+    title.textContent = "Set a new password";
+    subtitle.textContent = "Choose a fresh password for your Forex Lab account.";
   }
+}
+
+function resetTokenFromUrl(): string {
+  if (window.location.pathname !== "/reset-password") return "";
+  return new URLSearchParams(window.location.search).get("token") || "";
+}
+
+function returnToLogin(): void {
+  window.history.replaceState({}, "", "/");
+  state.resetToken = "";
+  setAuthMode("login");
 }
 
 function setTab(tab: JournalTab): void {
@@ -702,6 +770,51 @@ async function handleSignup(event: SubmitEvent): Promise<void> {
   showToast("Account created.");
 }
 
+async function handleForgotPassword(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  const form = event.currentTarget as HTMLFormElement;
+  const formData = new FormData(form);
+
+  const response = await api<{ ok: boolean; message: string }>("/api/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({
+      email: formData.get("email")
+    })
+  });
+
+  setAuthMessage("#forgotPasswordMessage", response.message || "If that email is registered, a reset link has been sent.");
+}
+
+async function handleResetPassword(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  const form = event.currentTarget as HTMLFormElement;
+  const formData = new FormData(form);
+  const password = String(formData.get("password") || "");
+  const confirmPassword = String(formData.get("confirmPassword") || "");
+
+  if (!state.resetToken) {
+    setAuthMessage("#resetPasswordMessage", "Reset link is invalid or expired.", true);
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    setAuthMessage("#resetPasswordMessage", "Passwords do not match.", true);
+    return;
+  }
+
+  await api<{ ok: boolean }>("/api/reset-password", {
+    method: "POST",
+    body: JSON.stringify({
+      token: state.resetToken,
+      password
+    })
+  });
+
+  form.reset();
+  setAuthMessage("#resetPasswordMessage", "Password updated. Redirecting to login...");
+  window.setTimeout(returnToLogin, 1400);
+}
+
 async function handleTradeSave(event: SubmitEvent): Promise<void> {
   event.preventDefault();
   await api<{ trade: Trade }>("/api/trades", {
@@ -830,6 +943,20 @@ function bindEvents(): void {
     handleSignup(event).catch((error) => showToast(error.message));
   });
 
+  qs<HTMLButtonElement>("#forgotPasswordButton").addEventListener("click", () => setAuthMode("forgot"));
+  qs<HTMLButtonElement>("#forgotBackButton").addEventListener("click", returnToLogin);
+  qs<HTMLButtonElement>("#resetBackButton").addEventListener("click", returnToLogin);
+
+  qs<HTMLFormElement>("#forgotPasswordForm").addEventListener("submit", (event) => {
+    handleForgotPassword(event).catch((error) => showToast(error.message));
+  });
+
+  qs<HTMLFormElement>("#resetPasswordForm").addEventListener("submit", (event) => {
+    handleResetPassword(event).catch((error) => {
+      setAuthMessage("#resetPasswordMessage", error.message, true);
+    });
+  });
+
   qs<HTMLFormElement>("#tradeForm").addEventListener("submit", (event) => {
     handleTradeSave(event).catch((error) => showToast(error.message));
   });
@@ -860,7 +987,6 @@ function bindEvents(): void {
 
 async function init(): Promise<void> {
   bindEvents();
-  setAuthMode("login");
   setSegment("direction", state.direction);
   setSegment("result", state.result);
   setSegment("emotion", state.emotion);
@@ -871,6 +997,16 @@ async function init(): Promise<void> {
   setToday();
   updateRr();
   renderShotPreview();
+
+  if (window.location.pathname === "/reset-password") {
+    state.resetToken = resetTokenFromUrl();
+    showAuth();
+    setAuthMode("reset");
+    if (!state.resetToken) setAuthMessage("#resetPasswordMessage", "Reset link is invalid or expired.", true);
+    return;
+  }
+
+  setAuthMode("login");
 
   try {
     const response = await api<{ user: User }>("/api/me");
