@@ -368,6 +368,7 @@ async function handleSignup(req: IncomingMessage, res: ServerResponse): Promise<
   ]);
 
   if (userError) {
+    console.error("Supabase user insert failed:", userError);
     sendError(res, 500, "Failed to create user profile.");
     return;
   }
@@ -382,6 +383,7 @@ async function handleSignup(req: IncomingMessage, res: ServerResponse): Promise<
   ]);
 
   if (sessionError) {
+    console.error("Supabase session insert failed:", sessionError);
     sendError(res, 500, "Failed to create session.");
     return;
   }
