@@ -199,6 +199,20 @@ function welcomeEmailHtml(name: string): string {
   `;
 }
 
+function welcomeEmailText(name: string): string {
+  const safeName = titleCase(name.replace(/[<>&]/g, ""));
+  const appUrl = APP_URL || "your dashboard";
+
+  return `Welcome, ${safeName}.
+
+Your trading journal is ready. Log setups, track the psychology behind each trade, and review your P&L whenever you're ready to get started.
+
+Open your journal: ${appUrl}
+
+—
+You're receiving this because an account was just created with this email address at Forex Lab. If this wasn't you, you can ignore this message.`;
+}
+
 // Fire-and-forget welcome email. Failures are logged but never block or fail the signup request itself —
 // a missing/expired email provider key or a transient send error shouldn't prevent someone from signing up.
 // NOTE: this only sends a welcome email today. To add email *verification* later, generate a token here,
@@ -213,6 +227,7 @@ async function sendWelcomeEmail(user: { name: string; email: string }): Promise<
       from: `"${MAIL_FROM_NAME}" <${GMAIL_USER}>`,
       to: user.email,
       subject: "Welcome to Forex Lab",
+      text: welcomeEmailText(user.name),
       html: welcomeEmailHtml(user.name)
     });
   } catch (error) {
