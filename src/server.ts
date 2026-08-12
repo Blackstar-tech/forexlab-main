@@ -1,9 +1,10 @@
 import { createServer, IncomingMessage, ServerResponse } from "http";
 import * as crypto from "crypto";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import dotenv from "dotenv";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
 
 dotenv.config();
@@ -17,14 +18,14 @@ const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || "Forex Lab";
 const APP_URL = process.env.APP_URL || "";
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error("❌ Missing SUPABASE_URL or SUPABASE_KEY in .env file!");
+  console.error("Missing SUPABASE_URL or SUPABASE_KEY.");
 }
 
 if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
-  console.warn("⚠️  Missing GMAIL_USER or GMAIL_APP_PASSWORD in .env file — signup emails will be skipped.");
+  console.warn("Missing GMAIL_USER or GMAIL_APP_PASSWORD. Signup emails will be skipped.");
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+let supabase: SupabaseClient | null = null;
 const mailTransporter =
   GMAIL_USER && GMAIL_APP_PASSWORD
     ? nodemailer.createTransport({
@@ -36,8 +37,30 @@ const mailTransporter =
       })
     : null;
 
-const publicDir = path.join(__dirname, "..", "public");
-const dataDir = path.join(__dirname, "..", ".data");
+function resolveProjectPath(dirName: string): string {
+  const candidates = [
+    path.resolve(process.cwd(), dirName),
+    path.resolve(__dirname, "..", dirName),
+    path.resolve(__dirname, "..", "..", dirName)
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
+}
+
+function getSupabase(): SupabaseClient {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error("Backend configuration is missing Supabase credentials.");
+  }
+
+  if (!supabase) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+
+  return supabase;
+}
+
+const publicDir = resolveProjectPath("public");
+const dataDir = process.env.VERCEL ? path.join(os.tmpdir(), "forexlab") : resolveProjectPath(".data");
 const uploadsDir = path.join(dataDir, "uploads");
 const sessionCookie = "fj_session";
 
@@ -282,7 +305,7 @@ async function requireAuth(req: IncomingMessage): Promise<AuthedRequest | null> 
   const token = cookies[sessionCookie];
   if (!token) return null;
 
-  const { data: session } = await supabase
+  const { data: session } = await getSupabase()
     .from("sessions")
     .select("*, users(*)")
     .eq("token", token)
@@ -323,7 +346,7 @@ async function handleSignup(req: IncomingMessage, res: ServerResponse): Promise<
     return;
   }
 
-  const { data: existingUser } = await supabase.from("users").select("id").eq("email", email).single();
+  const { data: existingUser } = await getSupabase().from("users").select("id").eq("email", email).single();
   if (existingUser) {
     sendError(res, 409, "That email is already registered.");
     return;
@@ -333,7 +356,7 @@ async function handleSignup(req: IncomingMessage, res: ServerResponse): Promise<
   const userId = makeId("usr");
   const createdAt = new Date().toISOString();
 
-  const { error: userError } = await supabase.from("users").insert([
+  const { error: userError } = await getSupabase().from("users").insert([
     {
       id: userId,
       name,
@@ -350,7 +373,7 @@ async function handleSignup(req: IncomingMessage, res: ServerResponse): Promise<
   }
 
   const token = crypto.randomBytes(32).toString("hex");
-  const { error: sessionError } = await supabase.from("sessions").insert([
+  const { error: sessionError } = await getSupabase().from("sessions").insert([
     {
       token,
       user_id: userId,
@@ -376,7 +399,7 @@ async function handleLogin(req: IncomingMessage, res: ServerResponse): Promise<v
   const email = toText(body.email).toLowerCase();
   const password = toText(body.password);
 
-  const { data: rawUser } = await supabase.from("users").select("*").eq("email", email).single();
+  const { data: rawUser } = await getSupabase().from("users").select("*").eq("email", email).single();
 
   if (!rawUser) {
     sendError(res, 401, "Incorrect email or password.");
@@ -398,7 +421,7 @@ async function handleLogin(req: IncomingMessage, res: ServerResponse): Promise<v
   }
 
   const token = crypto.randomBytes(32).toString("hex");
-  await supabase.from("sessions").insert([
+  await getSupabase().from("sessions").insert([
     {
       token,
       user_id: user.id,
@@ -415,7 +438,7 @@ async function handleLogout(req: IncomingMessage, res: ServerResponse): Promise<
   const token = cookies[sessionCookie];
 
   if (token) {
-    await supabase.from("sessions").delete().eq("token", token);
+    await getSupabase().from("sessions").delete().eq("token", token);
   }
 
   clearSessionCookie(res);
@@ -455,7 +478,7 @@ async function handleCreateTrade(req: IncomingMessage, res: ServerResponse, auth
     return;
   }
 
-  const { data, error } = await supabase.from("trades").insert([tradeData]).select().single();
+  const { data, error } = await getSupabase().from("trades").insert([tradeData]).select().single();
 
   if (error) {
     console.error(error);
@@ -496,7 +519,7 @@ async function handleCreateTrade(req: IncomingMessage, res: ServerResponse, auth
 }
 
 async function handleTrades(req: IncomingMessage, res: ServerResponse, auth: AuthedRequest): Promise<void> {
-  const { data: dbTrades, error } = await supabase
+  const { data: dbTrades, error } = await getSupabase()
     .from("trades")
     .select("*")
     .eq("user_id", auth.user.id)
@@ -540,7 +563,7 @@ async function handleTrades(req: IncomingMessage, res: ServerResponse, auth: Aut
 }
 
 async function handleDeleteTrade(res: ServerResponse, auth: AuthedRequest, id: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from("trades")
     .delete()
     .eq("id", id)
@@ -608,6 +631,15 @@ async function handleUploadServe(res: ServerResponse, filename: string): Promise
 
 async function handleApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
   const method = req.method || "GET";
+
+  if (pathname === "/api/health" && method === "GET") {
+    sendJson(res, 200, {
+      ok: true,
+      supabaseConfigured: Boolean(SUPABASE_URL && SUPABASE_KEY),
+      emailConfigured: Boolean(GMAIL_USER && GMAIL_APP_PASSWORD)
+    });
+    return;
+  }
 
   if (pathname === "/api/signup" && method === "POST") {
     await handleSignup(req, res);
@@ -718,21 +750,27 @@ async function serveStatic(res: ServerResponse, pathname: string): Promise<void>
 export async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   try {
     const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    const rewrittenApiPath = requestUrl.searchParams.get("path");
+    const pathname =
+      requestUrl.pathname === "/api/index" && rewrittenApiPath
+        ? `/api/${rewrittenApiPath.replace(/^\/+/, "")}`
+        : requestUrl.pathname;
 
-    if (requestUrl.pathname.startsWith("/api/")) {
-      await handleApi(req, res, requestUrl.pathname);
+    if (pathname.startsWith("/api/")) {
+      await handleApi(req, res, pathname);
       return;
     }
 
-    await serveStatic(res, requestUrl.pathname);
+    await serveStatic(res, pathname);
   } catch (error) {
     console.error(error);
     sendError(res, 500, error instanceof Error ? error.message : "Server error.");
   }
 }
 
-// Only start a real listening server when running locally (e.g. `ts-node src/server.ts`).
-// On Vercel, this file is imported by api/index.ts instead — no .listen() needed there.
+// Only start a real listening server when running locally (e.g. `ts-node src/server.ts`
+// or `node dist/src/server.js`). On Vercel this file is imported by api/index.ts instead,
+// so this block should never run there.
 if (require.main === module) {
   createServer((req, res) => {
     handleRequest(req, res);
@@ -740,3 +778,10 @@ if (require.main === module) {
     console.log(`Trade journal running at http://localhost:${port}`);
   });
 }
+
+// Safety net: if anything on Vercel (e.g. a "main" field in package.json, or an old
+// build config) ever loads this file directly as a function entry instead of going
+// through api/index.ts, it still needs a valid default export — a function with the
+// (req, res) signature Vercel's Node runtime expects. handleRequest already matches
+// that shape exactly, so we just point default at it.
+export default handleRequest;
