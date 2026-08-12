@@ -11,6 +11,7 @@
   // src/client.ts
   var require_client = __commonJS({
     "src/client.ts"() {
+      var monthlyTargetStorageKey = "forexlab.monthlyTargets.v1";
       var state = {
         user: null,
         trades: [],
@@ -24,7 +25,8 @@
         confidence: "",
         activeShot: "before",
         screenshots: { before: null, after: null, analysis: null },
-        resetToken: ""
+        resetToken: "",
+        monthlyTarget: { mode: "currency", value: 0, baseBalance: null }
       };
       function qs(selector, root = document) {
         const element = root.querySelector(selector);
@@ -287,6 +289,7 @@
       async function loadTrades() {
         const response = await api("/api/trades");
         state.trades = response.trades;
+        loadMonthlyTargetForSelectedMonth();
         renderDashboard();
         renderHistory();
         renderMonthlyPnl();
@@ -302,6 +305,10 @@
       function percent(value) {
         return `${Math.round(value)}%`;
       }
+      function precisePercent(value) {
+        const rounded = Math.round(value * 10) / 10;
+        return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}%`;
+      }
       function monthKey(date) {
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
       }
@@ -309,9 +316,103 @@
         const [year, month] = key.split("-").map(Number);
         return { year, month: month - 1 };
       }
+      function defaultMonthlyTarget() {
+        return { mode: "currency", value: 0, baseBalance: null };
+      }
+      function normalizeMonthlyTarget(value) {
+        const input = value && typeof value === "object" ? value : {};
+        const mode = input.mode === "percent" ? "percent" : "currency";
+        const targetValue = typeof input.value === "number" && Number.isFinite(input.value) ? input.value : 0;
+        const baseBalance = typeof input.baseBalance === "number" && Number.isFinite(input.baseBalance) && input.baseBalance > 0 ? input.baseBalance : null;
+        return {
+          mode,
+          value: Math.max(0, targetValue),
+          baseBalance
+        };
+      }
+      function monthlyTargetStoreKey() {
+        return `${state.user?.id || "local"}:${state.selectedMonth}`;
+      }
+      function readMonthlyTargetStore() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(monthlyTargetStorageKey) || "{}");
+          const input = parsed && typeof parsed === "object" ? parsed : {};
+          return Object.entries(input).reduce((store, [key, value]) => {
+            store[key] = normalizeMonthlyTarget(value);
+            return store;
+          }, {});
+        } catch {
+          return {};
+        }
+      }
+      function writeMonthlyTargetStore(store) {
+        localStorage.setItem(monthlyTargetStorageKey, JSON.stringify(store));
+      }
+      function loadMonthlyTargetForSelectedMonth() {
+        const store = readMonthlyTargetStore();
+        state.monthlyTarget = store[monthlyTargetStoreKey()] || defaultMonthlyTarget();
+        syncMonthlyTargetControls();
+      }
+      function saveMonthlyTargetForSelectedMonth() {
+        const store = readMonthlyTargetStore();
+        const key = monthlyTargetStoreKey();
+        if (state.monthlyTarget.value > 0 || state.monthlyTarget.baseBalance) {
+          store[key] = state.monthlyTarget;
+        } else {
+          delete store[key];
+        }
+        writeMonthlyTargetStore(store);
+      }
+      function monthlyTargetFromControls() {
+        const targetInput = qs("#monthlyTargetInput");
+        const baseInput = qs("#monthlyTargetBaseInput");
+        const targetValue = Number(targetInput.value);
+        const baseBalance = Number(baseInput.value);
+        return {
+          mode: state.monthlyTarget.mode,
+          value: Number.isFinite(targetValue) ? Math.max(0, targetValue) : 0,
+          baseBalance: Number.isFinite(baseBalance) && baseBalance > 0 ? baseBalance : null
+        };
+      }
+      function syncMonthlyTargetControls() {
+        const target = state.monthlyTarget;
+        const targetInput = qs("#monthlyTargetInput");
+        const baseInput = qs("#monthlyTargetBaseInput");
+        const baseField = qs("#monthlyTargetBaseField");
+        const targetEditor = qs(".target-editor");
+        targetInput.value = target.value > 0 ? String(target.value) : "";
+        targetInput.placeholder = target.mode === "percent" ? "8" : "2500";
+        baseInput.value = target.baseBalance ? String(target.baseBalance) : "";
+        baseField.toggleAttribute("hidden", target.mode !== "percent");
+        targetEditor.classList.toggle("has-base", target.mode === "percent");
+        qsa("[data-target-mode]").forEach((button) => {
+          button.classList.toggle("is-active", button.dataset.targetMode === target.mode);
+        });
+      }
+      function monthlyTargetAmount(target) {
+        if (target.value <= 0) return null;
+        if (target.mode === "currency") return target.value;
+        if (!target.baseBalance) return null;
+        return target.baseBalance * (target.value / 100);
+      }
+      function remainingWeekdaysInSelectedMonth() {
+        const today = /* @__PURE__ */ new Date();
+        const todayMonth = monthKey(today);
+        if (state.selectedMonth < todayMonth) return 0;
+        const { year, month } = parseMonthKey(state.selectedMonth);
+        const start = state.selectedMonth === todayMonth ? new Date(today.getFullYear(), today.getMonth(), today.getDate()) : new Date(year, month, 1);
+        const end = new Date(year, month + 1, 0);
+        let days = 0;
+        for (const cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+          const weekday = cursor.getDay();
+          if (weekday >= 1 && weekday <= 5) days += 1;
+        }
+        return days;
+      }
       function shiftMonth(delta) {
         const { year, month } = parseMonthKey(state.selectedMonth);
         state.selectedMonth = monthKey(new Date(year, month + delta, 1));
+        loadMonthlyTargetForSelectedMonth();
         renderMonthlyPnl();
       }
       function dayLabel(dateKey) {
@@ -551,8 +652,36 @@
         qs("#monthlyTrades").textContent = String(monthTrades.length);
         qs("#monthlyDays").textContent = String(dailyValues.length);
         qs("#monthlyBestDay").textContent = bestDay ? `${dayLabel(bestDay[0])} ${currency(bestDay[1].pnl)}` : "-";
+        renderMonthlyGoal(monthlyTotal);
         renderMonthlyCalendar(daily);
         renderMonthlyDayList(daily);
+      }
+      function renderMonthlyGoal(monthlyTotal) {
+        const target = state.monthlyTarget;
+        const targetAmount = monthlyTargetAmount(target);
+        const progressBar = qs("#monthlyGoalProgressBar");
+        const progressTrack = qs(".goal-progress-track");
+        const status = qs("#monthlyGoalStatus");
+        const progressValue = qs("#monthlyGoalProgressValue");
+        const achieved = targetAmount ? monthlyTotal / targetAmount * 100 : 0;
+        const cappedProgress = Math.max(0, Math.min(100, achieved));
+        progressBar.style.width = `${cappedProgress}%`;
+        progressTrack.setAttribute("aria-valuenow", String(Math.round(cappedProgress)));
+        progressValue.textContent = targetAmount ? precisePercent(achieved) : "0%";
+        qs("#monthlyGoalAchieved").textContent = targetAmount ? precisePercent(achieved) : "0%";
+        if (!targetAmount) {
+          status.textContent = target.mode === "percent" && target.value > 0 ? "Add balance for % target" : "No target set";
+          qs("#monthlyGoalRemaining").textContent = "-";
+          qs("#monthlyGoalPace").textContent = "-";
+          return;
+        }
+        const remaining = Math.max(0, targetAmount - monthlyTotal);
+        const weekdaysRemaining = remainingWeekdaysInSelectedMonth();
+        const dailyPace = remaining > 0 && weekdaysRemaining > 0 ? remaining / weekdaysRemaining : 0;
+        const goalDescription = target.mode === "percent" ? `${precisePercent(target.value)} target = ${currency(targetAmount)}` : `${currency(targetAmount)} target`;
+        status.textContent = remaining <= 0 ? `${goalDescription} reached` : weekdaysRemaining > 0 ? `${goalDescription} over ${weekdaysRemaining} trading day${weekdaysRemaining === 1 ? "" : "s"}` : `${goalDescription} month closed`;
+        qs("#monthlyGoalRemaining").textContent = currency(remaining);
+        qs("#monthlyGoalPace").textContent = currency(dailyPace);
       }
       function setMoneyText(selector, value) {
         const element = qs(selector);
@@ -566,6 +695,7 @@
         const { year, month } = parseMonthKey(state.selectedMonth);
         const firstDay = new Date(year, month, 1).getDay();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const strongestDay = Math.max(...Array.from(daily.values()).map((item) => Math.abs(item.pnl)), 0);
         calendar.textContent = "";
         weekdays.forEach((weekday) => {
           const cell = document.createElement("div");
@@ -585,6 +715,9 @@
           cell.className = "monthly-day";
           if (item) {
             cell.classList.add(item.pnl > 0 ? "is-profit" : item.pnl < 0 ? "is-loss" : "is-flat");
+            const intensity = strongestDay ? Math.abs(item.pnl) / strongestDay : 0;
+            cell.style.setProperty("--heatmap-alpha", (0.08 + intensity * 0.26).toFixed(3));
+            cell.style.setProperty("--heatmap-border-alpha", (0.22 + intensity * 0.38).toFixed(3));
           }
           const dayNumber = document.createElement("span");
           dayNumber.className = "day-number";
@@ -892,10 +1025,30 @@
         qs("#monthPicker").addEventListener("change", (event) => {
           const value = event.currentTarget.value;
           state.selectedMonth = value || monthKey(/* @__PURE__ */ new Date());
+          loadMonthlyTargetForSelectedMonth();
           renderMonthlyPnl();
         });
         qs("#prevMonth").addEventListener("click", () => shiftMonth(-1));
         qs("#nextMonth").addEventListener("click", () => shiftMonth(1));
+        qs("#monthlyTargetInput").addEventListener("input", () => {
+          state.monthlyTarget = monthlyTargetFromControls();
+          saveMonthlyTargetForSelectedMonth();
+          renderMonthlyPnl();
+        });
+        qs("#monthlyTargetBaseInput").addEventListener("input", () => {
+          state.monthlyTarget = monthlyTargetFromControls();
+          saveMonthlyTargetForSelectedMonth();
+          renderMonthlyPnl();
+        });
+        qsa("[data-target-mode]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const mode = button.dataset.targetMode === "percent" ? "percent" : "currency";
+            state.monthlyTarget = { ...monthlyTargetFromControls(), mode };
+            syncMonthlyTargetControls();
+            saveMonthlyTargetForSelectedMonth();
+            renderMonthlyPnl();
+          });
+        });
         document.addEventListener("click", (event) => {
           const target = event.target;
           const button = target.closest("[data-delete-trade]");

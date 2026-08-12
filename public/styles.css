@@ -107,7 +107,11 @@ table td,
 .monthly-list-row em,
 .breakdown-row strong,
 .breakdown-row em,
-#monthlyBestDay {
+#monthlyBestDay,
+#monthlyGoalProgressValue,
+#monthlyGoalAchieved,
+#monthlyGoalRemaining,
+#monthlyGoalPace {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
@@ -779,6 +783,170 @@ textarea:focus {
   min-width: 170px;
 }
 
+.monthly-goal {
+  display: grid;
+  gap: 16px;
+  margin: 0 0 18px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(135deg, rgb(var(--color-accent-rgb) / 0.08), transparent 54%),
+    rgb(var(--color-white-rgb) / 0.032);
+  box-shadow: inset 0 1px 0 rgb(var(--color-white-rgb) / 0.055);
+  backdrop-filter: blur(18px);
+}
+
+.monthly-goal-header {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.monthly-goal h3 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.monthly-goal p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+}
+
+.target-editor {
+  display: grid;
+  grid-template-columns: auto minmax(130px, 160px);
+  gap: 10px;
+  align-items: end;
+}
+
+.target-editor.has-base {
+  grid-template-columns: auto minmax(130px, 160px) minmax(130px, 160px);
+}
+
+.target-mode {
+  display: flex;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-white-rgb) / 0.04);
+}
+
+.target-mode button {
+  width: 38px;
+  min-height: 38px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  font-weight: 800;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.target-mode button:hover,
+.target-mode button:focus-visible {
+  border-color: rgb(var(--color-accent-rgb) / 0.45);
+  color: var(--text);
+}
+
+.target-mode button.is-active {
+  background: var(--accent);
+  color: var(--color-ink);
+  box-shadow: 0 10px 24px rgb(var(--color-accent-rgb) / 0.22);
+}
+
+.target-field {
+  min-width: 0;
+  gap: 6px;
+}
+
+.target-field span {
+  font-size: var(--font-size-xs);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.target-field input {
+  min-height: 50px;
+  font-family: var(--font-mono);
+}
+
+.goal-progress {
+  display: grid;
+  gap: 9px;
+}
+
+.goal-progress-track {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid rgb(var(--color-white-rgb) / 0.08);
+  border-radius: 999px;
+  background: rgb(var(--color-white-rgb) / 0.055);
+}
+
+.goal-progress-track span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--color-profit));
+  box-shadow: 0 0 22px rgb(var(--color-profit-rgb) / 0.28);
+  transition: width 180ms ease;
+}
+
+.goal-progress-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+}
+
+.goal-progress-meta strong {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.goal-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.goal-metrics article {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-white-rgb) / 0.028);
+}
+
+.goal-metrics span {
+  display: block;
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.goal-metrics strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--text);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  word-break: break-word;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1016,6 +1184,11 @@ td {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: rgb(var(--color-white-rgb) / 0.025);
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.monthly-day:not(.is-empty):hover {
+  transform: translateY(-1px);
 }
 
 .monthly-day.is-empty {
@@ -1024,13 +1197,17 @@ td {
 }
 
 .monthly-day.is-profit {
-  border-color: rgb(var(--color-accent-rgb) / 0.4);
-  background: rgb(var(--color-profit-rgb) / 0.08);
+  border-color: rgb(var(--color-profit-rgb) / var(--heatmap-border-alpha, 0.35));
+  background:
+    linear-gradient(160deg, rgb(var(--color-profit-rgb) / var(--heatmap-alpha, 0.08)), transparent 72%),
+    rgb(var(--color-white-rgb) / 0.025);
 }
 
 .monthly-day.is-loss {
-  border-color: rgb(var(--color-loss-rgb) / 0.4);
-  background: rgb(var(--color-loss-rgb) / 0.08);
+  border-color: rgb(var(--color-loss-rgb) / var(--heatmap-border-alpha, 0.35));
+  background:
+    linear-gradient(160deg, rgb(var(--color-loss-rgb) / var(--heatmap-alpha, 0.08)), transparent 72%),
+    rgb(var(--color-white-rgb) / 0.025);
 }
 
 .monthly-day.is-flat {
@@ -1203,6 +1380,20 @@ td {
   .analytics-layout {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .monthly-goal-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .target-editor {
+    width: 100%;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .target-editor.has-base {
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 720px) {
@@ -1238,10 +1429,29 @@ td {
   .metrics-grid,
   .analytics-grid,
   .monthly-grid,
+  .goal-metrics,
   .analytics-layout,
   .form-grid,
   .form-grid.three {
     grid-template-columns: 1fr;
+  }
+
+  .target-editor,
+  .target-editor.has-base {
+    grid-template-columns: 1fr;
+  }
+
+  .target-mode {
+    width: 100%;
+  }
+
+  .target-mode button {
+    flex: 1;
+  }
+
+  .goal-progress-meta {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .sidebar {
