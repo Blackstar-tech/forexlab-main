@@ -230,6 +230,7 @@ async function sendWelcomeEmail(user: { name: string; email: string }): Promise<
       text: welcomeEmailText(user.name),
       html: welcomeEmailHtml(user.name)
     });
+    console.log("Welcome email accepted by SMTP server for:", user.email);
   } catch (error) {
     // Never let a slow/failed email provider break signup — log it and move on.
     console.error("Welcome email failed to send:", error);
@@ -308,6 +309,7 @@ async function sendPasswordResetEmail(user: { name: string; email: string }, tok
       text: passwordResetEmailText(user.name, resetLink),
       html: passwordResetEmailHtml(user.name, resetLink)
     });
+    console.log("Password reset email accepted by SMTP server for:", user.email);
   } catch (error) {
     console.error("Password reset email failed to send:", error);
   }
