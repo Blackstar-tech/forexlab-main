@@ -1931,3 +1931,89 @@ th[data-sort].is-sorted .sort-indicator {
     bottom: 18px;
   }
 }
+
+/* ---------- Theme toggle ---------- */
+.theme-toggle {
+  margin-left: auto;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgb(var(--color-white-rgb) / 0.035);
+  font-size: 15px;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+.theme-toggle:hover {
+  border-color: rgb(var(--color-accent-rgb) / 0.5);
+  transform: translateY(-1px);
+}
+/* ---------- Collapsible sidebar nav ---------- */
+.sidebar-nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-white-rgb) / 0.035);
+  color: var(--text);
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+}
+.sidebar-nav-toggle-icon {
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 140ms ease;
+}
+.sidebar-nav-toggle[aria-expanded="true"] .sidebar-nav-toggle-icon {
+  transform: rotate(225deg);
+}
+/* ---------- Light theme overrides ---------- */
+[data-theme="light"] {
+  --color-bg-base: #f2f4f8;
+  --color-surface: rgb(255 255 255 / 0.86);
+  --color-border: rgb(15 23 42 / 0.1);
+  --color-text-primary: #0f172a;
+  --color-text-muted: #55606b;
+  --color-surface-rgb: 255 255 255;
+  --color-bg-rgb: 242 244 248;
+  --color-white-rgb: 15 23 42;
+  --shadow: 0 20px 50px rgb(15 23 42 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.6);
+}
+[data-theme="light"] body {
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      rgb(var(--color-accent-rgb) / 0.05) 0,
+      rgb(var(--color-accent-rgb) / 0.05) 1px,
+      transparent 1px,
+      transparent 64px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      rgb(var(--color-accent-rgb) / 0.05) 0,
+      rgb(var(--color-accent-rgb) / 0.05) 1px,
+      transparent 1px,
+      transparent 64px
+    ),
+    linear-gradient(135deg, rgb(var(--color-accent-rgb) / 0.08), transparent 42%),
+    linear-gradient(315deg, rgb(var(--color-profit-rgb) / 0.06), transparent 44%);
+}
+@media (max-width: 720px) {
+  .sidebar-nav-toggle {
+    display: flex;
+  }
+  .side-nav {
+    display: none;
+  }
+  .side-nav.is-open {
+    display: grid;
+  }
+}

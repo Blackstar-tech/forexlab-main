@@ -65,6 +65,12 @@ type DailyPnlSummary = {
 };
 
 const monthlyTargetStorageKey = "forexlab.monthlyTargets.v1";
+const themeStorageKey = "forexlab.theme";
+function applyStoredTheme(): void {
+  const stored = localStorage.getItem(themeStorageKey);
+  if (stored === "light") document.documentElement.setAttribute("data-theme", "light");
+}
+applyStoredTheme();
 
 const state: {
   user: User | null;
@@ -1171,6 +1177,32 @@ function closeCommandBar(): void {
   qs<HTMLDivElement>("#commandBar").setAttribute("hidden", "true");
 }
 
+function currentTheme(): "light" | "dark" {
+  return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+}
+function updateThemeToggleIcon(): void {
+  const icon = document.querySelector<HTMLSpanElement>("#themeToggle .theme-toggle-icon");
+  if (!icon) return;
+  icon.textContent = currentTheme() === "light" ? "☀️" : "🌙";
+}
+function toggleTheme(): void {
+  const next = currentTheme() === "light" ? "dark" : "light";
+  if (next === "light") {
+    document.documentElement.setAttribute("data-theme", "light");
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+  localStorage.setItem(themeStorageKey, next);
+  updateThemeToggleIcon();
+}
+function toggleSidebarNav(): void {
+  const nav = qs<HTMLElement>("#sideNav");
+  const button = qs<HTMLButtonElement>("#sidebarNavToggle");
+  const willOpen = !nav.classList.contains("is-open");
+  nav.classList.toggle("is-open", willOpen);
+  button.setAttribute("aria-expanded", String(willOpen));
+}
+
 function renderEquityCurve(): void {
   const chart = qs<HTMLDivElement>("#equityCurve");
   const ordered = [...state.trades].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
@@ -1325,8 +1357,12 @@ function bindEvents(): void {
     button.addEventListener("click", () => {
       const tab = button.dataset.tab;
       if (tab === "log" || tab === "history" || tab === "monthly" || tab === "analytics") setTab(tab);
+      const nav = document.querySelector<HTMLElement>("#sideNav");
+      if (nav?.classList.contains("is-open")) toggleSidebarNav();
     });
   });
+  qs<HTMLButtonElement>("#themeToggle").addEventListener("click", toggleTheme);
+  qs<HTMLButtonElement>("#sidebarNavToggle").addEventListener("click", toggleSidebarNav);
 
   qsa<HTMLButtonElement>("[data-direction]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1532,6 +1568,7 @@ function bindEvents(): void {
 
 async function init(): Promise<void> {
   bindEvents();
+  updateThemeToggleIcon();
   initCustomSelects();
   setSegment("direction", state.direction);
   setSegment("result", state.result);

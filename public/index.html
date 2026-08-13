@@ -103,15 +103,20 @@
           <strong>Forex Lab</strong>
           <span>Journal</span>
         </div>
+        <button type="button" id="themeToggle" class="theme-toggle" aria-label="Toggle light and dark theme">
+          <span class="theme-toggle-icon" aria-hidden="true">🌙</span>
+        </button>
       </div>
-
-      <nav class="side-nav" aria-label="Journal navigation">
+      <button type="button" id="sidebarNavToggle" class="sidebar-nav-toggle" aria-expanded="true" aria-controls="sideNav">
+        <span>Menu</span>
+        <span class="sidebar-nav-toggle-icon" aria-hidden="true"></span>
+      </button>
+      <nav id="sideNav" class="side-nav" aria-label="Journal navigation">
         <button type="button" data-tab="log" class="is-active">Log trade</button>
         <button type="button" data-tab="history">History</button>
         <button type="button" data-tab="monthly">Monthly P&amp;L</button>
         <button type="button" data-tab="analytics">Analytics</button>
       </nav>
-
       <button id="logoutButton" class="ghost sidebar-logout" type="button">Logout</button>
     </aside>
 
