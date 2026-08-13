@@ -81,6 +81,7 @@ const state: {
   screenshots: TradeScreenshots;
   resetToken: string;
   monthlyTarget: MonthlyTarget;
+  historySort: { key: string; direction: "asc" | "desc" };
 } = {
   user: null,
   trades: [],
@@ -95,7 +96,8 @@ const state: {
   activeShot: "before",
   screenshots: { before: null, after: null, analysis: null },
   resetToken: "",
-  monthlyTarget: { mode: "currency", value: 0, baseBalance: null }
+  monthlyTarget: { mode: "currency", value: 0, baseBalance: null },
+  historySort: { key: "date", direction: "desc" }
 };
 
 type CustomSelect = {
@@ -604,16 +606,51 @@ function renderDashboard(): void {
   qs("#metricRating").textContent = summary.averageRating ? summary.averageRating.toFixed(1) : "-";
 }
 
+function historySortValue(trade: Trade, key: string): string | number {
+  switch (key) {
+    case "date": return `${trade.date} ${trade.time || ""}`;
+    case "pair": return trade.pair;
+    case "direction": return trade.direction;
+    case "result": return trade.result;
+    case "pnl": return trade.pnl;
+    case "rr": return trade.plannedRr ?? -Infinity;
+    case "rating": return trade.rating ?? 0;
+    default: return "";
+  }
+}
+
+function updateHistorySortIndicators(): void {
+  qsa<HTMLTableCellElement>("th[data-sort]").forEach((th) => {
+    const key = th.dataset.sort || "";
+    const active = key === state.historySort.key;
+    th.classList.toggle("is-sorted", active);
+    th.classList.toggle("is-sorted-asc", active && state.historySort.direction === "asc");
+    th.classList.toggle("is-sorted-desc", active && state.historySort.direction === "desc");
+  });
+}
+
 function renderHistory(): void {
   const tbody = qs<HTMLTableSectionElement>("#historyBody");
   const resultFilter = qs<HTMLSelectElement>("#resultFilter").value;
   const search = qs<HTMLInputElement>("#searchTrades").value.trim().toLowerCase();
-  const trades = state.trades.filter((trade) => {
-    const matchesResult = resultFilter === "all" || trade.result === resultFilter;
-    const text = `${trade.pair} ${trade.setup} ${trade.session} ${trade.notes}`.toLowerCase();
-    return matchesResult && (!search || text.includes(search));
-  });
+  const trades = state.trades
+    .filter((trade) => {
+      const matchesResult = resultFilter === "all" || trade.result === resultFilter;
+      const text = `${trade.pair} ${trade.setup} ${trade.session} ${trade.notes}`.toLowerCase();
+      return matchesResult && (!search || text.includes(search));
+    })
+    .sort((a, b) => {
+      const { key, direction } = state.historySort;
+      const valueA = historySortValue(a, key);
+      const valueB = historySortValue(b, key);
+      const compared =
+        typeof valueA === "number" && typeof valueB === "number"
+          ? valueA - valueB
+          : String(valueA).localeCompare(String(valueB));
+      return direction === "asc" ? compared : -compared;
+    });
 
+  updateHistorySortIndicators();
   tbody.textContent = "";
 
   if (!trades.length) {
@@ -1044,6 +1081,96 @@ function renderPairBreakdown(): void {
     });
 }
 
+type CommandItem = {
+  id: string;
+  label: string;
+  hint?: string;
+  keywords: string;
+  run: () => void;
+};
+
+let commandBarFiltered: CommandItem[] = [];
+let commandBarActiveIndex = 0;
+
+function commandItems(): CommandItem[] {
+  return [
+    { id: "new-trade", label: "New trade", hint: "Log Trade", keywords: "new trade log add create", run: () => { setTab("log"); qs<HTMLSelectElement>("#pair").focus(); } },
+    { id: "history", label: "Trade history", hint: "History", keywords: "history trades review", run: () => setTab("history") },
+    { id: "monthly", label: "Monthly P&L", hint: "Monthly", keywords: "monthly pnl target goal", run: () => setTab("monthly") },
+    { id: "analytics", label: "Analytics", hint: "Analytics", keywords: "analytics equity pairs", run: () => setTab("analytics") },
+    { id: "logout", label: "Log out", hint: "Account", keywords: "logout sign out exit", run: () => { logout().catch((error) => showToast(error.message)); } }
+  ];
+}
+
+function renderCommandBarList(): void {
+  const list = qs<HTMLDivElement>("#commandBarList");
+  list.textContent = "";
+
+  if (!commandBarFiltered.length) {
+    const empty = document.createElement("div");
+    empty.className = "command-bar-empty";
+    empty.textContent = "No matching commands.";
+    list.append(empty);
+    return;
+  }
+
+  commandBarFiltered.forEach((item, index) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "command-bar-item";
+    row.classList.toggle("is-active", index === commandBarActiveIndex);
+    row.setAttribute("role", "option");
+
+    const label = document.createElement("span");
+    label.textContent = item.label;
+    row.append(label);
+
+    if (item.hint) {
+      const hint = document.createElement("small");
+      hint.textContent = item.hint;
+      row.append(hint);
+    }
+
+    row.addEventListener("click", () => runCommand(item));
+    list.append(row);
+  });
+}
+
+function runCommand(item: CommandItem): void {
+  closeCommandBar();
+  item.run();
+}
+
+function filterCommandBar(query: string): void {
+  const normalized = query.trim().toLowerCase();
+  commandBarFiltered = commandItems().filter(
+    (item) => !normalized || `${item.label} ${item.keywords}`.toLowerCase().includes(normalized)
+  );
+  commandBarActiveIndex = 0;
+  renderCommandBarList();
+}
+
+function moveCommandBarSelection(delta: number): void {
+  if (!commandBarFiltered.length) return;
+  commandBarActiveIndex = (commandBarActiveIndex + delta + commandBarFiltered.length) % commandBarFiltered.length;
+  renderCommandBarList();
+}
+
+function openCommandBar(): void {
+  if (!state.user) return;
+  commandBarFiltered = commandItems();
+  commandBarActiveIndex = 0;
+  qs<HTMLDivElement>("#commandBar").removeAttribute("hidden");
+  const input = qs<HTMLInputElement>("#commandBarInput");
+  input.value = "";
+  renderCommandBarList();
+  window.setTimeout(() => input.focus(), 0);
+}
+
+function closeCommandBar(): void {
+  qs<HTMLDivElement>("#commandBar").setAttribute("hidden", "true");
+}
+
 function renderEquityCurve(): void {
   const chart = qs<HTMLDivElement>("#equityCurve");
   const ordered = [...state.trades].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
@@ -1350,6 +1477,55 @@ function bindEvents(): void {
     const button = target.closest<HTMLButtonElement>("[data-delete-trade]");
     if (button?.dataset.deleteTrade) {
       deleteTrade(button.dataset.deleteTrade).catch((error) => showToast(error.message));
+    }
+  });
+
+  qsa<HTMLTableCellElement>("th[data-sort]").forEach((th) => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.sort || "";
+      if (state.historySort.key === key) {
+        state.historySort.direction = state.historySort.direction === "asc" ? "desc" : "asc";
+      } else {
+        state.historySort = { key, direction: key === "pnl" || key === "rating" ? "desc" : "asc" };
+      }
+      renderHistory();
+    });
+  });
+
+  qs<HTMLButtonElement>("#commandBarTrigger").addEventListener("click", openCommandBar);
+  qs<HTMLButtonElement>("#fabNewTrade").addEventListener("click", () => setTab("log"));
+
+  qs<HTMLDivElement>("#commandBar").addEventListener("click", (event) => {
+    if (event.target === qs<HTMLDivElement>("#commandBar")) closeCommandBar();
+  });
+
+  qs<HTMLInputElement>("#commandBarInput").addEventListener("input", (event) => {
+    filterCommandBar((event.currentTarget as HTMLInputElement).value);
+  });
+
+  qs<HTMLInputElement>("#commandBarInput").addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      moveCommandBarSelection(1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      moveCommandBarSelection(-1);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const item = commandBarFiltered[commandBarActiveIndex];
+      if (item) runCommand(item);
+    } else if (event.key === "Escape") {
+      closeCommandBar();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const isCommandKey = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
+    if (isCommandKey) {
+      event.preventDefault();
+      const backdrop = qs<HTMLDivElement>("#commandBar");
+      if (backdrop.hasAttribute("hidden")) openCommandBar();
+      else closeCommandBar();
     }
   });
 }
