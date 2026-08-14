@@ -111,6 +111,19 @@ type Trade = {
   createdAt: string;
 };
 
+type CaseStudy = {
+  id: string;
+  userId: string;
+  date: string;
+  pair: string;
+  session: string;
+  direction: "buy" | "sell";
+  setup: string;
+  notes: string;
+  screenshot: string | null;
+  createdAt: string;
+};
+
 type AuthedRequest = {
   user: User;
   token: string;
@@ -642,6 +655,114 @@ async function handleLogout(req: IncomingMessage, res: ServerResponse): Promise<
   sendJson(res, 200, { ok: true });
 }
 
+async function handleUpdateProfile(req: IncomingMessage, res: ServerResponse, auth: AuthedRequest): Promise<void> {
+  const body = (await readBody(req)) as Record<string, unknown>;
+  const name = toText(body.name);
+
+  if (!name || name.length < 2) {
+    sendError(res, 400, "Name must be at least 2 characters.");
+    return;
+  }
+
+  const { error } = await getSupabase().from("users").update({ name }).eq("id", auth.user.id);
+
+  if (error) {
+    console.error("Supabase profile update failed:", error);
+    sendError(res, 500, "Failed to update profile.");
+    return;
+  }
+
+  sendJson(res, 200, { user: { id: auth.user.id, name, email: auth.user.email } });
+}
+
+async function handleCreateCaseStudy(req: IncomingMessage, res: ServerResponse, auth: AuthedRequest): Promise<void> {
+  const body = (await readBody(req)) as Record<string, unknown>;
+
+  const caseStudyData = {
+    id: makeId("case"),
+    user_id: auth.user.id,
+    date: toText(body.date),
+    pair: toText(body.pair),
+    session: toText(body.session),
+    direction: body.direction === "sell" ? "sell" : "buy",
+    setup: toText(body.setup),
+    notes: toText(body.notes),
+    screenshot: toText(body.screenshot) || null,
+    created_at: new Date().toISOString()
+  };
+
+  if (!caseStudyData.date || !caseStudyData.pair || !caseStudyData.setup) {
+    sendError(res, 400, "Date, pair, and setup are required.");
+    return;
+  }
+
+  const { data, error } = await getSupabase().from("case_studies").insert([caseStudyData]).select().single();
+
+  if (error) {
+    console.error("Supabase case study insert failed:", error);
+    sendError(res, 500, "Failed to save case study.");
+    return;
+  }
+
+  const caseStudy: CaseStudy = {
+    id: data.id,
+    userId: data.user_id,
+    date: data.date,
+    pair: data.pair,
+    session: data.session || "",
+    direction: data.direction,
+    setup: data.setup,
+    notes: data.notes || "",
+    screenshot: data.screenshot,
+    createdAt: data.created_at
+  };
+
+  sendJson(res, 201, { caseStudy });
+}
+
+async function handleCaseStudies(req: IncomingMessage, res: ServerResponse, auth: AuthedRequest): Promise<void> {
+  const { data, error } = await getSupabase()
+    .from("case_studies")
+    .select("*")
+    .eq("user_id", auth.user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    sendError(res, 500, "Failed to fetch case studies.");
+    return;
+  }
+
+  const caseStudies: CaseStudy[] = (data || []).map((c) => ({
+    id: c.id,
+    userId: c.user_id,
+    date: c.date,
+    pair: c.pair,
+    session: c.session || "",
+    direction: c.direction,
+    setup: c.setup,
+    notes: c.notes || "",
+    screenshot: c.screenshot,
+    createdAt: c.created_at
+  }));
+
+  sendJson(res, 200, { caseStudies });
+}
+
+async function handleDeleteCaseStudy(res: ServerResponse, auth: AuthedRequest, id: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from("case_studies")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", auth.user.id);
+
+  if (error) {
+    sendError(res, 500, "Failed to delete case study.");
+    return;
+  }
+
+  sendJson(res, 200, { ok: true });
+}
+
 async function handleCreateTrade(req: IncomingMessage, res: ServerResponse, auth: AuthedRequest): Promise<void> {
   const body = (await readBody(req)) as Record<string, unknown>;
   const direction = body.direction === "sell" ? "sell" : "buy";
@@ -874,6 +995,11 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, pathname: st
     return;
   }
 
+  if (pathname === "/api/me" && method === "POST") {
+    await handleUpdateProfile(req, res, auth);
+    return;
+  }
+
   if (pathname === "/api/trades" && method === "GET") {
     await handleTrades(req, res, auth);
     return;
@@ -886,6 +1012,21 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, pathname: st
 
   if (pathname.startsWith("/api/trades/") && method === "DELETE") {
     await handleDeleteTrade(res, auth, pathname.replace("/api/trades/", ""));
+    return;
+  }
+
+  if (pathname === "/api/case-studies" && method === "GET") {
+    await handleCaseStudies(req, res, auth);
+    return;
+  }
+
+  if (pathname === "/api/case-studies" && method === "POST") {
+    await handleCreateCaseStudy(req, res, auth);
+    return;
+  }
+
+  if (pathname.startsWith("/api/case-studies/") && method === "DELETE") {
+    await handleDeleteCaseStudy(res, auth, pathname.replace("/api/case-studies/", ""));
     return;
   }
 
