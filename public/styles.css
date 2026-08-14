@@ -1,25 +1,25 @@
 @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 
 :root {
-  --color-profit: #36f995;
-  --color-loss: #ff5c7a;
-  --color-accent: #22d3ee;
-  --color-bg-base: #070a0f;
-  --color-surface: rgb(12 18 28 / 0.72);
-  --color-border: rgb(255 255 255 / 0.1);
-  --color-text-primary: #f8fafc;
-  --color-text-muted: #b8c4cf;
+  --color-profit: #22e08f;
+  --color-loss: #ff5468;
+  --color-accent: #22e08f;
+  --color-bg-base: #070b09;
+  --color-surface: rgb(17 23 20 / 0.72);
+  --color-border: rgb(255 255 255 / 0.07);
+  --color-text-primary: #f4f7f5;
+  --color-text-muted: #8b978f;
 
-  --color-profit-rgb: 54 249 149;
-  --color-loss-rgb: 255 92 122;
-  --color-accent-rgb: 34 211 238;
+  --color-profit-rgb: 34 224 143;
+  --color-loss-rgb: 255 84 104;
+  --color-accent-rgb: 34 224 143;
   --color-warning-rgb: 246 200 95;
-  --color-surface-rgb: 12 18 28;
-  --color-bg-rgb: 7 10 15;
+  --color-surface-rgb: 17 23 20;
+  --color-bg-rgb: 7 11 9;
   --color-white-rgb: 255 255 255;
-  --color-ink: #031014;
+  --color-ink: #04160e;
   --color-warning: #f6c85f;
-  --color-cyan-soft: #8beeff;
+  --color-cyan-soft: #7cf5c4;
 
   --radius-sm: 6px;
   --radius-md: 8px;
