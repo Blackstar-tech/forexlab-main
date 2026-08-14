@@ -531,6 +531,32 @@ async function handleLogin(req: IncomingMessage, res: ServerResponse): Promise<v
   sendJson(res, 200, { user: publicUser(user) });
 }
 
+async function sendPasswordResetEmail(
+  user: { name: string; email: string },
+  token: string,
+  origin: string
+): Promise<void> {
+  if (!mailTransporter) return;
+
+  const resetLink = `${origin}/reset-password?token=${token}`;
+
+  try {
+    await mailTransporter.sendMail({
+      from: `"${MAIL_FROM_NAME}" <${GMAIL_USER}>`,
+      to: user.email,
+      subject: "Reset your Forex Lab password",
+      text: passwordResetEmailText(user.name, resetLink),
+      html: passwordResetEmailHtml(user.name, resetLink)
+    });
+  } catch (error) {
+    console.error("Password reset email failed to send:", error);
+  }
+}
+
+
+
+
+
 async function handleForgotPassword(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const body = (await readBody(req)) as Record<string, unknown>;
   const email = toText(body.email).toLowerCase();
