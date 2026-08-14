@@ -46,7 +46,7 @@ type ApiError = {
 
 type AuthMode = "login" | "signup" | "forgot" | "reset";
 
-type JournalTab = "log" | "history" | "monthly" | "analytics" | "casestudy";
+type JournalTab = "log" | "history" | "monthly" | "analytics";
 
 type MonthlyTargetMode = "currency" | "percent";
 
@@ -62,18 +62,6 @@ type DailyPnlSummary = {
   wins: number;
   losses: number;
   breakeven: number;
-};
-
-type CaseStudy = {
-  id: string;
-  date: string;
-  pair: string;
-  session: string;
-  direction: "buy" | "sell";
-  setup: string;
-  notes: string;
-  screenshot: string | null;
-  createdAt: string;
 };
 
 const monthlyTargetStorageKey = "forexlab.monthlyTargets.v1";
@@ -100,8 +88,6 @@ const state: {
   resetToken: string;
   monthlyTarget: MonthlyTarget;
   historySort: { key: string; direction: "asc" | "desc" };
-  caseStudies: CaseStudy[];
-  caseStudyDirection: "buy" | "sell";
 } = {
   user: null,
   trades: [],
@@ -117,9 +103,7 @@ const state: {
   screenshots: { before: null, after: null, analysis: null },
   resetToken: "",
   monthlyTarget: { mode: "currency", value: 0, baseBalance: null },
-  historySort: { key: "date", direction: "desc" },
-  caseStudies: [],
-  caseStudyDirection: "buy"
+  historySort: { key: "date", direction: "desc" }
 };
 
 type CustomSelect = {
@@ -276,7 +260,6 @@ function setTab(tab: JournalTab): void {
   if (tab === "history") renderHistory();
   if (tab === "monthly") renderMonthlyPnl();
   if (tab === "analytics") renderAnalytics();
-  if (tab === "casestudy") renderCaseStudies();
 }
 
 function setSegment(group: string, value: string): void {
@@ -1121,7 +1104,6 @@ function commandItems(): CommandItem[] {
     { id: "history", label: "Trade history", hint: "History", keywords: "history trades review", run: () => setTab("history") },
     { id: "monthly", label: "Monthly P&L", hint: "Monthly", keywords: "monthly pnl target goal", run: () => setTab("monthly") },
     { id: "analytics", label: "Analytics", hint: "Analytics", keywords: "analytics equity pairs", run: () => setTab("analytics") },
-    { id: "casestudy", label: "Case studies", hint: "Case Studies", keywords: "case study watch list observed", run: () => setTab("casestudy") },
     { id: "logout", label: "Log out", hint: "Account", keywords: "logout sign out exit", run: () => { logout().catch((error) => showToast(error.message)); } }
   ];
 }
@@ -1216,136 +1198,45 @@ function toggleTheme(): void {
 function toggleSidebarNav(): void {
   const nav = qs<HTMLElement>("#sideNav");
   const button = qs<HTMLButtonElement>("#sidebarNavToggle");
-  const willCollapse = !nav.classList.contains("is-collapsed");
-  nav.classList.toggle("is-collapsed", willCollapse);
-  button.setAttribute("aria-expanded", String(!willCollapse));
+  const willOpen = !nav.classList.contains("is-open");
+  nav.classList.toggle("is-open", willOpen);
+  button.setAttribute("aria-expanded", String(willOpen));
 }
 
-function renderCaseStudies(): void {
-  const list = qs<HTMLDivElement>("#caseStudyList");
-  list.textContent = "";
+function renderEquityCurve(): void {
+  const chart = qs<HTMLDivElement>("#equityCurve");
+  const ordered = [...state.trades].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+  const values = ordered.reduce<number[]>((points, trade) => {
+    const last = points.length ? points[points.length - 1] : 0;
+    points.push(last + trade.pnl);
+    return points;
+  }, []);
 
-  if (!state.caseStudies.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty-row monthly-empty";
-    empty.textContent = "No case studies logged yet.";
-    list.append(empty);
+  if (!values.length) {
+    chart.innerHTML = `<div class="empty-chart">No equity data yet.</div>`;
     return;
   }
 
-  state.caseStudies.forEach((item) => {
-    const row = document.createElement("div");
-    row.className = "case-study-row";
+  const allValues = [0, ...values];
+  const min = Math.min(...allValues);
+  const max = Math.max(...allValues);
+  const range = max - min || 1;
+  const width = 680;
+  const height = 220;
+  const points = allValues
+    .map((value, index) => {
+      const x = (index / Math.max(1, allValues.length - 1)) * width;
+      const y = height - ((value - min) / range) * height;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
 
-    const badge = document.createElement("span");
-    badge.className = `badge ${item.direction}`;
-    badge.textContent = item.direction;
-
-    const meta = document.createElement("div");
-    meta.className = "cs-meta";
-
-    const title = document.createElement("strong");
-    title.textContent = `${item.pair} · ${item.setup}`;
-
-    const sub = document.createElement("small");
-    sub.textContent = `${item.date}${item.session ? ` · ${item.session}` : ""}`;
-
-    meta.append(title, sub);
-
-    if (item.notes) {
-      const notes = document.createElement("div");
-      notes.className = "cs-notes";
-      notes.textContent = item.notes;
-      meta.append(notes);
-    }
-
-    const deleteButton = document.createElement("button");
-    deleteButton.type = "button";
-    deleteButton.className = "ghost danger";
-    deleteButton.textContent = "Delete";
-    deleteButton.addEventListener("click", () => {
-      deleteCaseStudy(item.id).catch((error) => showToast(error.message));
-    });
-
-    row.append(badge, meta, deleteButton);
-    list.append(row);
-  });
-}
-
-function caseStudyPayload(): Record<string, unknown> {
-  return {
-    date: qs<HTMLInputElement>("#csDate").value,
-    pair: qs<HTMLSelectElement>("#csPair").value,
-    session: qs<HTMLSelectElement>("#csSession").value,
-    direction: state.caseStudyDirection,
-    setup: qs<HTMLInputElement>("#csSetup").value,
-    notes: qs<HTMLTextAreaElement>("#csNotes").value,
-    screenshot: null
-  };
-}
-
-function resetCaseStudyForm(): void {
-  qs<HTMLFormElement>("#caseStudyForm").reset();
-  syncAllCustomSelects();
-  state.caseStudyDirection = "buy";
-  setSegment("csdirection", "buy");
-  qs<HTMLInputElement>("#csDate").value = new Date().toISOString().slice(0, 10);
-}
-
-async function loadCaseStudies(): Promise<void> {
-  const response = await api<{ caseStudies: CaseStudy[] }>("/api/case-studies");
-  state.caseStudies = response.caseStudies;
-}
-
-async function handleCaseStudySave(event: SubmitEvent): Promise<void> {
-  event.preventDefault();
-  await api<{ caseStudy: CaseStudy }>("/api/case-studies", {
-    method: "POST",
-    body: JSON.stringify(caseStudyPayload())
-  });
-
-  await loadCaseStudies();
-  renderCaseStudies();
-  resetCaseStudyForm();
-  showToast("Case study saved.");
-}
-
-async function deleteCaseStudy(id: string): Promise<void> {
-  await api<{ ok: boolean }>(`/api/case-studies/${encodeURIComponent(id)}`, { method: "DELETE" });
-  await loadCaseStudies();
-  renderCaseStudies();
-  showToast("Case study deleted.");
-}
-
-function openEditName(): void {
-  qs<HTMLInputElement>("#editNameInput").value = state.user?.name || "";
-  qs<HTMLFormElement>("#editNameForm").removeAttribute("hidden");
-  qs<HTMLButtonElement>("#editNameButton").setAttribute("hidden", "true");
-  qs<HTMLInputElement>("#editNameInput").focus();
-}
-
-function closeEditName(): void {
-  qs<HTMLFormElement>("#editNameForm").setAttribute("hidden", "true");
-  qs<HTMLButtonElement>("#editNameButton").removeAttribute("hidden");
-}
-
-async function handleEditNameSave(event: SubmitEvent): Promise<void> {
-  event.preventDefault();
-  const name = qs<HTMLInputElement>("#editNameInput").value.trim();
-  if (!name || name.length < 2) {
-    showToast("Name must be at least 2 characters.");
-    return;
-  }
-
-  const response = await api<{ user: User }>("/api/me", {
-    method: "POST",
-    body: JSON.stringify({ name })
-  });
-
-  state.user = response.user;
-  qs<HTMLSpanElement>("#userName").textContent = state.user.name;
-  closeEditName();
-  showToast("Name updated.");
+  chart.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Equity curve">
+      <line x1="0" y1="${height}" x2="${width}" y2="${height}" />
+      <polyline points="${points}" />
+    </svg>
+  `;
 }
 
 async function handleLogin(event: SubmitEvent): Promise<void> {
@@ -1364,7 +1255,6 @@ async function handleLogin(event: SubmitEvent): Promise<void> {
   state.user = response.user;
   showApp();
   await loadTrades();
-  await loadCaseStudies();
   showToast("Signed in.");
 }
 
@@ -1385,7 +1275,6 @@ async function handleSignup(event: SubmitEvent): Promise<void> {
   state.user = response.user;
   showApp();
   await loadTrades();
-  await loadCaseStudies();
   showToast("Account created.");
 }
 
@@ -1467,7 +1356,9 @@ function bindEvents(): void {
   qsa<HTMLButtonElement>("[data-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       const tab = button.dataset.tab;
-      if (tab === "log" || tab === "history" || tab === "monthly" || tab === "analytics" || tab === "casestudy") setTab(tab);
+      if (tab === "log" || tab === "history" || tab === "monthly" || tab === "analytics") setTab(tab);
+      const nav = document.querySelector<HTMLElement>("#sideNav");
+      if (nav?.classList.contains("is-open")) toggleSidebarNav();
     });
   });
   qs<HTMLButtonElement>("#themeToggle").addEventListener("click", toggleTheme);
@@ -1673,25 +1564,6 @@ function bindEvents(): void {
       else closeCommandBar();
     }
   });
-
-  qsa<HTMLButtonElement>("[data-csdirection]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.caseStudyDirection = button.dataset.csdirection === "sell" ? "sell" : "buy";
-      setSegment("csdirection", state.caseStudyDirection);
-    });
-  });
-
-  qs<HTMLFormElement>("#caseStudyForm").addEventListener("submit", (event) => {
-    handleCaseStudySave(event).catch((error) => showToast(error.message));
-  });
-
-  qs<HTMLButtonElement>("#csResetButton").addEventListener("click", resetCaseStudyForm);
-
-  qs<HTMLButtonElement>("#editNameButton").addEventListener("click", openEditName);
-  qs<HTMLButtonElement>("#editNameCancel").addEventListener("click", closeEditName);
-  qs<HTMLFormElement>("#editNameForm").addEventListener("submit", (event) => {
-    handleEditNameSave(event).catch((error) => showToast(error.message));
-  });
 }
 
 async function init(): Promise<void> {
@@ -1704,12 +1576,10 @@ async function init(): Promise<void> {
   setSegment("sleep", state.sleepQuality);
   setSegment("confidence", state.confidence);
   setSegment("shot", state.activeShot);
-  setSegment("csdirection", state.caseStudyDirection);
   setRating(state.rating);
   setToday();
   updateRr();
   renderShotPreview();
-  qs<HTMLInputElement>("#csDate").value = new Date().toISOString().slice(0, 10);
 
   if (window.location.pathname === "/reset-password") {
     state.resetToken = resetTokenFromUrl();
@@ -1726,7 +1596,6 @@ async function init(): Promise<void> {
     state.user = response.user;
     showApp();
     await loadTrades();
-    await loadCaseStudies();
   } catch {
     showAuth();
   }
