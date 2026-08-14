@@ -309,23 +309,12 @@ Set a new password: ${resetLink}
 If you didn't request this password reset, you can ignore this email.`;
 }
 
-async function sendPasswordResetEmail(user: { name: string; email: string }, token: string): Promise<void> {
-  if (!mailTransporter) return;
-
-  const resetLink = `${APP_URL}/reset-password?token=${token}`;
-
-  try {
-    await mailTransporter.sendMail({
-      from: `"${MAIL_FROM_NAME}" <${GMAIL_USER}>`,
-      to: user.email,
-      subject: "Reset your Forex Lab password",
-      text: passwordResetEmailText(user.name, resetLink),
-      html: passwordResetEmailHtml(user.name, resetLink)
-    });
-    console.log("Password reset email accepted by SMTP server for:", user.email);
-  } catch (error) {
-    console.error("Password reset email failed to send:", error);
-  }
+function requestOrigin(req: IncomingMessage): string {
+  const host = req.headers.host;
+  if (!host) return APP_URL;
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const proto = typeof forwardedProto === "string" ? forwardedProto.split(",")[0] : "https";
+  return `${proto}://${host}`;
 }
 
 function sendJson(res: ServerResponse, status: number, payload: unknown): void {
@@ -587,7 +576,7 @@ async function handleForgotPassword(req: IncomingMessage, res: ServerResponse): 
     return;
   }
 
-  await sendPasswordResetEmail({ name: user.name, email: user.email }, token);
+  await sendPasswordResetEmail({ name: user.name, email: user.email }, token, requestOrigin(req));
   sendJson(res, 200, response);
 }
 
