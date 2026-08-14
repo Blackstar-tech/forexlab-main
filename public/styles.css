@@ -42,7 +42,7 @@
   --blue: var(--color-cyan-soft);
   --shadow: 0 24px 80px rgb(0 0 0 / 0.42), inset 0 1px 0 rgb(var(--color-white-rgb) / 0.06);
 
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "JetBrains Mono", "Space Grotesk", ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-body: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -2006,14 +2006,75 @@ th[data-sort].is-sorted .sort-indicator {
     linear-gradient(135deg, rgb(var(--color-accent-rgb) / 0.08), transparent 42%),
     linear-gradient(315deg, rgb(var(--color-profit-rgb) / 0.06), transparent 44%);
 }
-@media (max-width: 720px) {
-  .sidebar-nav-toggle {
-    display: flex;
-  }
-  .side-nav {
-    display: none;
-  }
-  .side-nav.is-open {
-    display: grid;
-  }
+
+/* ---------- Editable name ---------- */
+.topbar h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.edit-name-btn {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgb(var(--color-white-rgb) / 0.035);
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.edit-name-btn:hover {
+  border-color: rgb(var(--color-accent-rgb) / 0.5);
+  transform: translateY(-1px);
+}
+.edit-name-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.edit-name-form input {
+  width: auto;
+  min-width: 200px;
+  padding: 8px 10px;
+}
+/* ---------- Case study rows ---------- */
+.case-study-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-white-rgb) / 0.025);
+}
+.case-study-row .cs-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.case-study-row .cs-meta strong {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+}
+.case-study-row .cs-meta small {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+}
+.case-study-row .cs-notes {
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* ---------- Full sidebar collapse (works at every screen size) ---------- */
+.sidebar-nav-toggle {
+  display: flex;
+}
+.side-nav.is-collapsed {
+  display: none;
 }

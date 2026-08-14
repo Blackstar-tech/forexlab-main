@@ -116,6 +116,7 @@
         <button type="button" data-tab="history">History</button>
         <button type="button" data-tab="monthly">Monthly P&amp;L</button>
         <button type="button" data-tab="analytics">Analytics</button>
+        <button type="button" data-tab="casestudy">Case studies</button>
       </nav>
       <button id="logoutButton" class="ghost sidebar-logout" type="button">Logout</button>
     </aside>
@@ -124,7 +125,15 @@
       <header class="topbar">
         <div>
           <p class="eyebrow">Trading journal</p>
-          <h1>Welcome, <span id="userName">Trader</span></h1>
+          <h1>
+            Welcome, <span id="userName">Trader</span>
+            <button type="button" id="editNameButton" class="edit-name-btn" aria-label="Edit your name">✏️</button>
+          </h1>
+          <form id="editNameForm" class="edit-name-form" hidden>
+            <input id="editNameInput" type="text" minlength="2" required>
+            <button type="submit" class="primary compact">Save</button>
+            <button type="button" id="editNameCancel" class="ghost compact">Cancel</button>
+          </form>
         </div>
         <div class="topbar-actions">
           <button type="button" class="ghost" id="commandBarTrigger">⌘K Quick actions</button>
@@ -530,6 +539,76 @@
             </div>
             <div id="pairBreakdown" class="breakdown-list"></div>
           </article>
+        </section>
+      </section>
+
+      <section id="tab-casestudy" class="tab-panel">
+        <section class="panel">
+          <div class="panel-title">
+            <h2>📚 Case Study</h2>
+            <p>Log setups you watched but didn't take — build pattern recognition without risking capital.</p>
+          </div>
+          <form id="caseStudyForm">
+            <div class="form-grid three">
+              <label>
+                Date
+                <input id="csDate" type="date" required>
+              </label>
+              <label>
+                Pair / instrument
+                <select id="csPair" required>
+                  <option value="">Select pair</option>
+                  <option>EURUSD</option>
+                  <option>GBPUSD</option>
+                  <option>GBPJPY</option>
+                  <option>USDJPY</option>
+                  <option>AUDUSD</option>
+                  <option>USDCAD</option>
+                  <option>XAUUSD</option>
+                  <option>NAS100</option>
+                  <option>US30</option>
+                </select>
+              </label>
+              <label>
+                Session
+                <select id="csSession">
+                  <option value="">Select session</option>
+                  <option>London</option>
+                  <option>New York</option>
+                  <option>London/NY overlap</option>
+                  <option>Asia</option>
+                  <option>Sydney</option>
+                </select>
+              </label>
+            </div>
+            <div class="segmented-row">
+              <span>Direction</span>
+              <div class="segmented wide">
+                <button type="button" data-csdirection="buy">📈 Buy / Long</button>
+                <button type="button" data-csdirection="sell">📉 Sell / Short</button>
+              </div>
+            </div>
+            <label style="margin-top: 14px;">
+              Setup / pattern observed
+              <input id="csSetup" type="text" placeholder="e.g. Double top at resistance, failed breakout" required>
+            </label>
+            <label style="margin-top: 14px;">
+              Notes — why didn't you take it? What would confirm entry next time?
+              <textarea id="csNotes" rows="3"></textarea>
+            </label>
+            <div class="form-actions">
+              <button id="csResetButton" class="ghost" type="button">Reset</button>
+              <button class="primary" type="submit">Save case study</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel monthly-detail-panel">
+          <div class="panel-title">
+            <h2>Saved case studies</h2>
+            <p>Review setups you watched without entering, to sharpen pattern recognition.</p>
+          </div>
+          <div id="caseStudyList" class="monthly-day-list"></div>
         </section>
       </section>
     </main>
