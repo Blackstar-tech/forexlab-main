@@ -136,6 +136,8 @@
           </form>
         </div>
         <div class="topbar-actions">
+          <button type="button" id="mobileThemeToggle" class="ghost mobile-only-btn" aria-label="Toggle theme">🌗</button>
+          <button type="button" id="mobileLogoutButton" class="ghost mobile-only-btn" aria-label="Log out">⏻</button>
           <button type="button" class="ghost" id="commandBarTrigger">⌘K Quick actions</button>
           <button type="button" class="ghost" data-tab="monthly">Monthly P&amp;L</button>
           <button type="button" class="ghost" data-tab="history">Review trades</button>
@@ -613,6 +615,28 @@
       </section>
     </main>
     <button id="fabNewTrade" class="fab" type="button" aria-label="New trade">+</button>
+    <nav class="mobile-tab-bar" aria-label="Journal navigation">
+      <button type="button" data-tab="log" class="is-active">
+        <span aria-hidden="true">✏️</span>
+        <small>Log</small>
+      </button>
+      <button type="button" data-tab="history">
+        <span aria-hidden="true">📜</span>
+        <small>History</small>
+      </button>
+      <button type="button" data-tab="monthly">
+        <span aria-hidden="true">📅</span>
+        <small>Monthly</small>
+      </button>
+      <button type="button" data-tab="analytics">
+        <span aria-hidden="true">📊</span>
+        <small>Analytics</small>
+      </button>
+      <button type="button" data-tab="casestudy">
+        <span aria-hidden="true">📚</span>
+        <small>Case</small>
+      </button>
+    </nav>
   </div>
 
   <script src="/client.js"></script>

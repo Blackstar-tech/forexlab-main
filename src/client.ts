@@ -1623,6 +1623,10 @@ function bindEvents(): void {
   qs<HTMLButtonElement>("#logoutButton").addEventListener("click", () => {
     logout().catch((error) => showToast(error.message));
   });
+  qs<HTMLButtonElement>("#mobileThemeToggle").addEventListener("click", toggleTheme);
+  qs<HTMLButtonElement>("#mobileLogoutButton").addEventListener("click", () => {
+    logout().catch((error) => showToast(error.message));
+  });
 
   qs<HTMLButtonElement>("#resetButton").addEventListener("click", resetTradeForm);
   qs<HTMLSelectElement>("#resultFilter").addEventListener("change", renderHistory);
