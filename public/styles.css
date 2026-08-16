@@ -1615,6 +1615,43 @@ td {
   color: var(--danger);
 }
 
+/* ---------- Quick actions pill nav ---------- */
+.quick-actions {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+.quick-actions::-webkit-scrollbar {
+  display: none;
+}
+.quick-action-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgb(var(--color-white-rgb) / 0.045);
+  color: var(--text);
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+.quick-action-pill:hover {
+  border-color: rgb(var(--color-accent-rgb) / 0.5);
+  transform: translateY(-1px);
+}
+.quick-action-pill.is-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--color-ink);
+}
+
 /* ---------- Result cards (bigger win/loss/breakeven selector) ---------- */
 .result-cards {
   display: grid;

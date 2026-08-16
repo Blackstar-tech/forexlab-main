@@ -12,6 +12,12 @@
   var require_client = __commonJS({
     "src/client.ts"() {
       var monthlyTargetStorageKey = "forexlab.monthlyTargets.v1";
+      var themeStorageKey = "forexlab.theme";
+      function applyStoredTheme() {
+        const stored = localStorage.getItem(themeStorageKey);
+        if (stored === "light") document.documentElement.setAttribute("data-theme", "light");
+      }
+      applyStoredTheme();
       var state = {
         user: null,
         trades: [],
@@ -26,7 +32,10 @@
         activeShot: "before",
         screenshots: { before: null, after: null, analysis: null },
         resetToken: "",
-        monthlyTarget: { mode: "currency", value: 0, baseBalance: null }
+        monthlyTarget: { mode: "currency", value: 0, baseBalance: null },
+        historySort: { key: "date", direction: "desc" },
+        caseStudies: [],
+        caseStudyDirection: "buy"
       };
       function qs(selector, root = document) {
         const element = root.querySelector(selector);
@@ -152,6 +161,7 @@
         if (tab === "history") renderHistory();
         if (tab === "monthly") renderMonthlyPnl();
         if (tab === "analytics") renderAnalytics();
+        if (tab === "casestudy") renderCaseStudies();
       }
       function setSegment(group, value) {
         qsa(`[data-${group}]`).forEach((button) => {
@@ -440,6 +450,35 @@
         qs("#metricPnl").textContent = currency(summary.netPnl);
         qs("#metricRating").textContent = summary.averageRating ? summary.averageRating.toFixed(1) : "-";
       }
+      function historySortValue(trade, key) {
+        switch (key) {
+          case "date":
+            return `${trade.date} ${trade.time || ""}`;
+          case "pair":
+            return trade.pair;
+          case "direction":
+            return trade.direction;
+          case "result":
+            return trade.result;
+          case "pnl":
+            return trade.pnl;
+          case "rr":
+            return trade.plannedRr ?? -Infinity;
+          case "rating":
+            return trade.rating ?? 0;
+          default:
+            return "";
+        }
+      }
+      function updateHistorySortIndicators() {
+        qsa("th[data-sort]").forEach((th) => {
+          const key = th.dataset.sort || "";
+          const active = key === state.historySort.key;
+          th.classList.toggle("is-sorted", active);
+          th.classList.toggle("is-sorted-asc", active && state.historySort.direction === "asc");
+          th.classList.toggle("is-sorted-desc", active && state.historySort.direction === "desc");
+        });
+      }
       function renderHistory() {
         const tbody = qs("#historyBody");
         const resultFilter = qs("#resultFilter").value;
@@ -448,7 +487,14 @@
           const matchesResult = resultFilter === "all" || trade.result === resultFilter;
           const text = `${trade.pair} ${trade.setup} ${trade.session} ${trade.notes}`.toLowerCase();
           return matchesResult && (!search || text.includes(search));
+        }).sort((a, b) => {
+          const { key, direction } = state.historySort;
+          const valueA = historySortValue(a, key);
+          const valueB = historySortValue(b, key);
+          const compared = typeof valueA === "number" && typeof valueB === "number" ? valueA - valueB : String(valueA).localeCompare(String(valueB));
+          return direction === "asc" ? compared : -compared;
         });
+        updateHistorySortIndicators();
         tbody.textContent = "";
         if (!trades.length) {
           const row = document.createElement("tr");
@@ -794,6 +840,211 @@
           list.append(row);
         });
       }
+      var commandBarFiltered = [];
+      var commandBarActiveIndex = 0;
+      function commandItems() {
+        return [
+          { id: "new-trade", label: "New trade", hint: "Log Trade", keywords: "new trade log add create", run: () => {
+            setTab("log");
+            qs("#pair").focus();
+          } },
+          { id: "history", label: "Trade history", hint: "History", keywords: "history trades review", run: () => setTab("history") },
+          { id: "monthly", label: "Monthly P&L", hint: "Monthly", keywords: "monthly pnl target goal", run: () => setTab("monthly") },
+          { id: "analytics", label: "Analytics", hint: "Analytics", keywords: "analytics equity pairs", run: () => setTab("analytics") },
+          { id: "casestudy", label: "Case studies", hint: "Case Studies", keywords: "case study watch list observed", run: () => setTab("casestudy") },
+          { id: "logout", label: "Log out", hint: "Account", keywords: "logout sign out exit", run: () => {
+            logout().catch((error) => showToast(error.message));
+          } }
+        ];
+      }
+      function renderCommandBarList() {
+        const list = qs("#commandBarList");
+        list.textContent = "";
+        if (!commandBarFiltered.length) {
+          const empty = document.createElement("div");
+          empty.className = "command-bar-empty";
+          empty.textContent = "No matching commands.";
+          list.append(empty);
+          return;
+        }
+        commandBarFiltered.forEach((item, index) => {
+          const row = document.createElement("button");
+          row.type = "button";
+          row.className = "command-bar-item";
+          row.classList.toggle("is-active", index === commandBarActiveIndex);
+          row.setAttribute("role", "option");
+          const label = document.createElement("span");
+          label.textContent = item.label;
+          row.append(label);
+          if (item.hint) {
+            const hint = document.createElement("small");
+            hint.textContent = item.hint;
+            row.append(hint);
+          }
+          row.addEventListener("click", () => runCommand(item));
+          list.append(row);
+        });
+      }
+      function runCommand(item) {
+        closeCommandBar();
+        item.run();
+      }
+      function filterCommandBar(query) {
+        const normalized = query.trim().toLowerCase();
+        commandBarFiltered = commandItems().filter(
+          (item) => !normalized || `${item.label} ${item.keywords}`.toLowerCase().includes(normalized)
+        );
+        commandBarActiveIndex = 0;
+        renderCommandBarList();
+      }
+      function moveCommandBarSelection(delta) {
+        if (!commandBarFiltered.length) return;
+        commandBarActiveIndex = (commandBarActiveIndex + delta + commandBarFiltered.length) % commandBarFiltered.length;
+        renderCommandBarList();
+      }
+      function openCommandBar() {
+        if (!state.user) return;
+        commandBarFiltered = commandItems();
+        commandBarActiveIndex = 0;
+        qs("#commandBar").removeAttribute("hidden");
+        const input = qs("#commandBarInput");
+        input.value = "";
+        renderCommandBarList();
+        window.setTimeout(() => input.focus(), 0);
+      }
+      function closeCommandBar() {
+        qs("#commandBar").setAttribute("hidden", "true");
+      }
+      function currentTheme() {
+        return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+      }
+      function updateThemeToggleIcon() {
+        const icon = document.querySelector("#themeToggle .theme-toggle-icon");
+        if (!icon) return;
+        icon.textContent = currentTheme() === "light" ? "\u2600\uFE0F" : "\u{1F319}";
+      }
+      function toggleTheme() {
+        const next = currentTheme() === "light" ? "dark" : "light";
+        if (next === "light") {
+          document.documentElement.setAttribute("data-theme", "light");
+        } else {
+          document.documentElement.removeAttribute("data-theme");
+        }
+        localStorage.setItem(themeStorageKey, next);
+        updateThemeToggleIcon();
+      }
+      function toggleSidebarNav() {
+        const nav = qs("#sideNav");
+        const button = qs("#sidebarNavToggle");
+        const willOpen = !nav.classList.contains("is-open");
+        nav.classList.toggle("is-open", willOpen);
+        button.setAttribute("aria-expanded", String(willOpen));
+      }
+      function renderCaseStudies() {
+        const list = qs("#caseStudyList");
+        list.textContent = "";
+        if (!state.caseStudies.length) {
+          const empty = document.createElement("div");
+          empty.className = "empty-row monthly-empty";
+          empty.textContent = "No case studies logged yet.";
+          list.append(empty);
+          return;
+        }
+        state.caseStudies.forEach((item) => {
+          const row = document.createElement("div");
+          row.className = "case-study-row";
+          const badge = document.createElement("span");
+          badge.className = `badge ${item.direction}`;
+          badge.textContent = item.direction;
+          const meta = document.createElement("div");
+          meta.className = "cs-meta";
+          const title = document.createElement("strong");
+          title.textContent = `${item.pair} \xB7 ${item.setup}`;
+          const sub = document.createElement("small");
+          sub.textContent = `${item.date}${item.session ? ` \xB7 ${item.session}` : ""}`;
+          meta.append(title, sub);
+          if (item.notes) {
+            const notes = document.createElement("div");
+            notes.className = "cs-notes";
+            notes.textContent = item.notes;
+            meta.append(notes);
+          }
+          const deleteButton = document.createElement("button");
+          deleteButton.type = "button";
+          deleteButton.className = "ghost danger";
+          deleteButton.textContent = "Delete";
+          deleteButton.addEventListener("click", () => {
+            deleteCaseStudy(item.id).catch((error) => showToast(error.message));
+          });
+          row.append(badge, meta, deleteButton);
+          list.append(row);
+        });
+      }
+      function caseStudyPayload() {
+        return {
+          date: qs("#csDate").value,
+          pair: qs("#csPair").value,
+          session: qs("#csSession").value,
+          direction: state.caseStudyDirection,
+          setup: qs("#csSetup").value,
+          notes: qs("#csNotes").value,
+          screenshot: null
+        };
+      }
+      function resetCaseStudyForm() {
+        qs("#caseStudyForm").reset();
+        syncAllCustomSelects();
+        state.caseStudyDirection = "buy";
+        setSegment("csdirection", "buy");
+        qs("#csDate").value = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+      }
+      async function loadCaseStudies() {
+        const response = await api("/api/case-studies");
+        state.caseStudies = response.caseStudies;
+      }
+      async function handleCaseStudySave(event) {
+        event.preventDefault();
+        await api("/api/case-studies", {
+          method: "POST",
+          body: JSON.stringify(caseStudyPayload())
+        });
+        await loadCaseStudies();
+        renderCaseStudies();
+        resetCaseStudyForm();
+        showToast("Case study saved.");
+      }
+      async function deleteCaseStudy(id) {
+        await api(`/api/case-studies/${encodeURIComponent(id)}`, { method: "DELETE" });
+        await loadCaseStudies();
+        renderCaseStudies();
+        showToast("Case study deleted.");
+      }
+      function openEditName() {
+        qs("#editNameInput").value = state.user?.name || "";
+        qs("#editNameForm").removeAttribute("hidden");
+        qs("#editNameButton").setAttribute("hidden", "true");
+        qs("#editNameInput").focus();
+      }
+      function closeEditName() {
+        qs("#editNameForm").setAttribute("hidden", "true");
+        qs("#editNameButton").removeAttribute("hidden");
+      }
+      async function handleEditNameSave(event) {
+        event.preventDefault();
+        const name = qs("#editNameInput").value.trim();
+        if (!name || name.length < 2) {
+          showToast("Name must be at least 2 characters.");
+          return;
+        }
+        const response = await api("/api/me", {
+          method: "POST",
+          body: JSON.stringify({ name })
+        });
+        state.user = response.user;
+        qs("#userName").textContent = state.user.name;
+        closeEditName();
+        showToast("Name updated.");
+      }
       function renderEquityCurve() {
         const chart = qs("#equityCurve");
         const ordered = [...state.trades].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
@@ -838,6 +1089,7 @@
         state.user = response.user;
         showApp();
         await loadTrades();
+        await loadCaseStudies();
         showToast("Signed in.");
       }
       async function handleSignup(event) {
@@ -855,6 +1107,7 @@
         state.user = response.user;
         showApp();
         await loadTrades();
+        await loadCaseStudies();
         showToast("Account created.");
       }
       async function handleForgotPassword(event) {
@@ -922,9 +1175,13 @@
         qsa("[data-tab]").forEach((button) => {
           button.addEventListener("click", () => {
             const tab = button.dataset.tab;
-            if (tab === "log" || tab === "history" || tab === "monthly" || tab === "analytics") setTab(tab);
+            if (tab === "log" || tab === "history" || tab === "monthly" || tab === "analytics" || tab === "casestudy") setTab(tab);
+            const nav = document.querySelector("#sideNav");
+            if (nav?.classList.contains("is-open")) toggleSidebarNav();
           });
         });
+        qs("#themeToggle").addEventListener("click", toggleTheme);
+        qs("#sidebarNavToggle").addEventListener("click", toggleSidebarNav);
         qsa("[data-direction]").forEach((button) => {
           button.addEventListener("click", () => {
             state.direction = button.dataset.direction === "sell" ? "sell" : "buy";
@@ -1019,6 +1276,10 @@
         qs("#logoutButton").addEventListener("click", () => {
           logout().catch((error) => showToast(error.message));
         });
+        qs("#mobileThemeToggle").addEventListener("click", toggleTheme);
+        qs("#mobileLogoutButton").addEventListener("click", () => {
+          logout().catch((error) => showToast(error.message));
+        });
         qs("#resetButton").addEventListener("click", resetTradeForm);
         qs("#resultFilter").addEventListener("change", renderHistory);
         qs("#searchTrades").addEventListener("input", renderHistory);
@@ -1056,9 +1317,68 @@
             deleteTrade(button.dataset.deleteTrade).catch((error) => showToast(error.message));
           }
         });
+        qsa("th[data-sort]").forEach((th) => {
+          th.addEventListener("click", () => {
+            const key = th.dataset.sort || "";
+            if (state.historySort.key === key) {
+              state.historySort.direction = state.historySort.direction === "asc" ? "desc" : "asc";
+            } else {
+              state.historySort = { key, direction: key === "pnl" || key === "rating" ? "desc" : "asc" };
+            }
+            renderHistory();
+          });
+        });
+        qs("#commandBarTrigger").addEventListener("click", openCommandBar);
+        qs("#fabNewTrade").addEventListener("click", () => setTab("log"));
+        qs("#commandBar").addEventListener("click", (event) => {
+          if (event.target === qs("#commandBar")) closeCommandBar();
+        });
+        qs("#commandBarInput").addEventListener("input", (event) => {
+          filterCommandBar(event.currentTarget.value);
+        });
+        qs("#commandBarInput").addEventListener("keydown", (event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            moveCommandBarSelection(1);
+          } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            moveCommandBarSelection(-1);
+          } else if (event.key === "Enter") {
+            event.preventDefault();
+            const item = commandBarFiltered[commandBarActiveIndex];
+            if (item) runCommand(item);
+          } else if (event.key === "Escape") {
+            closeCommandBar();
+          }
+        });
+        document.addEventListener("keydown", (event) => {
+          const isCommandKey = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
+          if (isCommandKey) {
+            event.preventDefault();
+            const backdrop = qs("#commandBar");
+            if (backdrop.hasAttribute("hidden")) openCommandBar();
+            else closeCommandBar();
+          }
+        });
+        qsa("[data-csdirection]").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.caseStudyDirection = button.dataset.csdirection === "sell" ? "sell" : "buy";
+            setSegment("csdirection", state.caseStudyDirection);
+          });
+        });
+        qs("#caseStudyForm").addEventListener("submit", (event) => {
+          handleCaseStudySave(event).catch((error) => showToast(error.message));
+        });
+        qs("#csResetButton").addEventListener("click", resetCaseStudyForm);
+        qs("#editNameButton").addEventListener("click", openEditName);
+        qs("#editNameCancel").addEventListener("click", closeEditName);
+        qs("#editNameForm").addEventListener("submit", (event) => {
+          handleEditNameSave(event).catch((error) => showToast(error.message));
+        });
       }
       async function init() {
         bindEvents();
+        updateThemeToggleIcon();
         initCustomSelects();
         setSegment("direction", state.direction);
         setSegment("result", state.result);
@@ -1066,10 +1386,12 @@
         setSegment("sleep", state.sleepQuality);
         setSegment("confidence", state.confidence);
         setSegment("shot", state.activeShot);
+        setSegment("csdirection", state.caseStudyDirection);
         setRating(state.rating);
         setToday();
         updateRr();
         renderShotPreview();
+        qs("#csDate").value = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
         if (window.location.pathname === "/reset-password") {
           state.resetToken = resetTokenFromUrl();
           showAuth();
@@ -1083,6 +1405,7 @@
           state.user = response.user;
           showApp();
           await loadTrades();
+          await loadCaseStudies();
         } catch {
           showAuth();
         }

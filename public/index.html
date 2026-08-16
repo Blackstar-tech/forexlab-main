@@ -138,10 +138,12 @@
         <div class="topbar-actions">
           <button type="button" id="mobileThemeToggle" class="ghost mobile-only-btn" aria-label="Toggle theme">🌗</button>
           <button type="button" id="mobileLogoutButton" class="ghost mobile-only-btn" aria-label="Log out">⏻</button>
-          <button type="button" class="ghost" id="commandBarTrigger">⌘K Quick actions</button>
-          <button type="button" class="ghost" data-tab="monthly">Monthly P&amp;L</button>
-          <button type="button" class="ghost" data-tab="history">Review trades</button>
-          <button type="button" class="primary compact" data-tab="log">New trade</button>
+          <div class="quick-actions">
+            <button type="button" class="ghost quick-action-pill" id="commandBarTrigger">⌘K Quick actions</button>
+            <button type="button" class="ghost quick-action-pill" data-tab="monthly">Monthly P&amp;L</button>
+            <button type="button" class="ghost quick-action-pill" data-tab="history">Review trades</button>
+            <button type="button" class="primary compact quick-action-pill is-primary" data-tab="log">New trade</button>
+          </div>
         </div>
       </header>
 
