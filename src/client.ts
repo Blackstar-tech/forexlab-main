@@ -627,6 +627,37 @@ function renderDashboard(): void {
   qs("#metricWinRate").textContent = percent(summary.winRate);
   qs("#metricPnl").textContent = currency(summary.netPnl);
   qs("#metricRating").textContent = summary.averageRating ? summary.averageRating.toFixed(1) : "-";
+  renderTraderLevel();
+}
+
+function traderLevelInfo(): { score: number; tier: string; label: string } {
+  const summary = stats();
+  const ratingScore = (summary.averageRating / 5) * 100;
+  const score = Math.max(0, Math.min(100, summary.winRate * 0.6 + ratingScore * 0.4));
+  let tier = "bronze";
+  let label = "Bronze";
+  if (score >= 80) { tier = "diamond"; label = "Diamond"; }
+  else if (score >= 60) { tier = "platinum"; label = "Platinum"; }
+  else if (score >= 40) { tier = "gold"; label = "Gold"; }
+  else if (score >= 20) { tier = "silver"; label = "Silver"; }
+  return { score, tier, label };
+}
+
+function renderTraderLevel(): void {
+  const { score, tier, label } = traderLevelInfo();
+  const circle = document.querySelector<SVGCircleElement>("#levelRingProgress");
+if (!circle) throw new Error("Missing element: #levelRingProgress");
+  const radius = 52;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - score / 100);
+
+  circle.style.strokeDasharray = `${circumference}`;
+  circle.style.strokeDashoffset = `${offset}`;
+  circle.classList.remove("level-tier-bronze", "level-tier-silver", "level-tier-gold", "level-tier-platinum", "level-tier-diamond");
+  circle.classList.add(`level-tier-${tier}`);
+
+  qs<HTMLElement>("#levelScore").textContent = String(Math.round(score));
+  qs<HTMLElement>("#levelLabel").textContent = label;
 }
 
 function historySortValue(trade: Trade, key: string): string | number {
@@ -918,8 +949,61 @@ function renderMonthlyPnl(): void {
   qs("#monthlyBestDay").textContent = bestDay ? `${dayLabel(bestDay[0])} ${currency(bestDay[1].pnl)}` : "-";
 
   renderMonthlyGoal(monthlyTotal);
+  renderWeeklyPnl(daily);
   renderMonthlyCalendar(daily);
   renderMonthlyDayList(daily);
+}
+
+function renderWeeklyPnl(daily: Map<string, DailyPnlSummary>): void {
+  const list = qs<HTMLDivElement>("#weeklyPnlList");
+  const { year, month } = parseMonthKey(state.selectedMonth);
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  type WeekBucket = { pnl: number; trades: number; startDay: number; endDay: number };
+  const weeks = new Map<number, WeekBucket>();
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const weekIndex = Math.floor((day - 1 + firstWeekday) / 7);
+    const bucket = weeks.get(weekIndex) || { pnl: 0, trades: 0, startDay: day, endDay: day };
+    bucket.endDay = day;
+    const dateKey = `${state.selectedMonth}-${String(day).padStart(2, "0")}`;
+    const item = daily.get(dateKey);
+    if (item) {
+      bucket.pnl += item.pnl;
+      bucket.trades += item.trades;
+    }
+    weeks.set(weekIndex, bucket);
+  }
+
+  list.textContent = "";
+  const entries = Array.from(weeks.entries()).sort((a, b) => a[0] - b[0]);
+
+  if (!entries.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-row monthly-empty";
+    empty.textContent = "No P&L logged for this month yet.";
+    list.append(empty);
+    return;
+  }
+
+  entries.forEach(([weekIndex, bucket], position) => {
+    const row = document.createElement("div");
+    row.className = "weekly-pnl-row";
+
+    const label = document.createElement("span");
+    label.textContent = `Week ${position + 1} (${bucket.startDay}\u2013${bucket.endDay})`;
+
+    const pnl = document.createElement("strong");
+    pnl.className = bucket.pnl >= 0 ? "positive" : "negative";
+    pnl.textContent = currency(bucket.pnl);
+
+    const count = document.createElement("small");
+    count.textContent = `${bucket.trades} trade${bucket.trades === 1 ? "" : "s"}`;
+
+    row.append(label, count, pnl);
+    list.append(row);
+  });
 }
 
 function renderMonthlyGoal(monthlyTotal: number): void {
@@ -1221,6 +1305,14 @@ function toggleSidebarNav(): void {
   button.setAttribute("aria-expanded", String(willOpen));
 }
 
+function toggleHamburgerMenu(forceClose = false): void {
+  const panel = qs<HTMLElement>("#hamburgerMenuPanel");
+  const trigger = qs<HTMLButtonElement>("#hamburgerMenuTrigger");
+  const willOpen = forceClose ? false : panel.hasAttribute("hidden");
+  panel.toggleAttribute("hidden", !willOpen);
+  trigger.setAttribute("aria-expanded", String(willOpen));
+}
+
 function renderCaseStudies(): void {
   const list = qs<HTMLDivElement>("#caseStudyList");
   list.textContent = "";
@@ -1506,10 +1598,20 @@ function bindEvents(): void {
       if (tab === "log" || tab === "history" || tab === "monthly" || tab === "analytics" || tab === "casestudy") setTab(tab);
       const nav = document.querySelector<HTMLElement>("#sideNav");
       if (nav?.classList.contains("is-open")) toggleSidebarNav();
+      toggleHamburgerMenu(true);
     });
   });
   qs<HTMLButtonElement>("#themeToggle").addEventListener("click", toggleTheme);
   qs<HTMLButtonElement>("#sidebarNavToggle").addEventListener("click", toggleSidebarNav);
+
+  qs<HTMLButtonElement>("#hamburgerMenuTrigger").addEventListener("click", () => toggleHamburgerMenu());
+
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    const panel = qs<HTMLElement>("#hamburgerMenuPanel");
+    const wrap = target.closest(".hamburger-wrap");
+    if (!wrap && !panel.hasAttribute("hidden")) toggleHamburgerMenu(true);
+  });
 
   qsa<HTMLButtonElement>("[data-direction]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1679,7 +1781,6 @@ function bindEvents(): void {
     });
   });
 
-  qs<HTMLButtonElement>("#commandBarTrigger").addEventListener("click", openCommandBar);
   qs<HTMLButtonElement>("#fabNewTrade").addEventListener("click", () => setTab("log"));
 
   qs<HTMLDivElement>("#commandBar").addEventListener("click", (event) => {

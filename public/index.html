@@ -138,11 +138,17 @@
         <div class="topbar-actions">
           <button type="button" id="mobileThemeToggle" class="ghost mobile-only-btn" aria-label="Toggle theme">🌗</button>
           <button type="button" id="mobileLogoutButton" class="ghost mobile-only-btn" aria-label="Log out">⏻</button>
-          <div class="quick-actions">
-            <button type="button" class="ghost quick-action-pill" id="commandBarTrigger">⌘K Quick actions</button>
-            <button type="button" class="ghost quick-action-pill" data-tab="monthly">Monthly P&amp;L</button>
-            <button type="button" class="ghost quick-action-pill" data-tab="history">Review trades</button>
-            <button type="button" class="primary compact quick-action-pill is-primary" data-tab="log">New trade</button>
+          <div class="hamburger-wrap">
+            <button type="button" id="hamburgerMenuTrigger" class="ghost hamburger-btn" aria-label="Open menu" aria-expanded="false" aria-controls="hamburgerMenuPanel">
+              <span class="hamburger-icon"><span></span><span></span><span></span></span>
+            </button>
+            <div id="hamburgerMenuPanel" class="hamburger-menu-panel" hidden role="menu" aria-label="Journal navigation">
+              <button type="button" data-tab="log" role="menuitem">📝 Log trade</button>
+              <button type="button" data-tab="history" role="menuitem">📜 History</button>
+              <button type="button" data-tab="monthly" role="menuitem">📅 Monthly P&amp;L</button>
+              <button type="button" data-tab="analytics" role="menuitem">📊 Analytics</button>
+              <button type="button" data-tab="casestudy" role="menuitem">📚 Case studies</button>
+            </div>
           </div>
         </div>
       </header>
@@ -163,6 +169,19 @@
         <article class="metric">
           <span>Avg rating</span>
           <strong id="metricRating">-</strong>
+        </article>
+        <article class="metric metric-level">
+          <span>Trader level</span>
+          <div class="trader-level" aria-label="Trader level progress">
+            <svg id="levelRing" viewBox="0 0 120 120" width="72" height="72">
+              <circle class="level-ring-track" cx="60" cy="60" r="52"></circle>
+              <circle id="levelRingProgress" class="level-ring-progress" cx="60" cy="60" r="52"></circle>
+            </svg>
+            <div class="trader-level-text">
+              <strong id="levelScore">0</strong>
+              <span id="levelLabel">-</span>
+            </div>
+          </div>
         </article>
       </section>
 
@@ -493,6 +512,14 @@
                 <strong id="monthlyGoalPace">$0.00</strong>
               </article>
             </div>
+          </section>
+
+          <section class="weekly-pnl" aria-label="Weekly P&L summary">
+            <div class="weekly-pnl-header">
+              <h3>Weekly P&amp;L</h3>
+              <p>Sum of profit and loss for each week in the selected month.</p>
+            </div>
+            <div id="weeklyPnlList" class="weekly-pnl-list"></div>
           </section>
 
           <div id="monthlyCalendar" class="monthly-calendar" aria-label="Monthly P&L calendar"></div>

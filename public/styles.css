@@ -1380,7 +1380,10 @@ td {
     margin-top: 0;
   }
 
-  .metrics-grid,
+  .metrics-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .analytics-grid,
   .monthly-grid,
   .analytics-layout {
@@ -1440,6 +1443,10 @@ td {
   .form-grid,
   .form-grid.three {
     grid-template-columns: 1fr;
+  }
+
+  .weekly-pnl-row {
+    grid-template-columns: 1fr auto;
   }
 
   .target-editor,
@@ -1619,43 +1626,6 @@ td {
   border-color: rgb(var(--color-loss-rgb) / 0.75);
   background: rgb(var(--color-loss-rgb) / 0.14);
   color: var(--danger);
-}
-
-/* ---------- Quick actions pill nav ---------- */
-.quick-actions {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  -webkit-overflow-scrolling: touch;
-}
-.quick-actions::-webkit-scrollbar {
-  display: none;
-}
-.quick-action-pill {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  min-height: 40px;
-  padding: 0 16px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgb(var(--color-white-rgb) / 0.045);
-  color: var(--text);
-  font-weight: 700;
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
-  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
-}
-.quick-action-pill:hover {
-  border-color: rgb(var(--color-accent-rgb) / 0.5);
-  transform: translateY(-1px);
-}
-.quick-action-pill.is-primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--color-ink);
 }
 
 /* ---------- Result cards (bigger win/loss/breakeven selector) ---------- */
@@ -2018,6 +1988,165 @@ th[data-sort].is-sorted .sort-indicator {
 .sidebar-nav-toggle[aria-expanded="true"] .sidebar-nav-toggle-icon {
   transform: rotate(225deg);
 }
+
+/* ---------- Hamburger menu (topbar) ---------- */
+.hamburger-wrap {
+  position: relative;
+}
+.hamburger-btn {
+  width: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.hamburger-icon {
+  display: grid;
+  gap: 4px;
+}
+.hamburger-icon span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text);
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+.hamburger-btn[aria-expanded="true"] .hamburger-icon span:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+.hamburger-btn[aria-expanded="true"] .hamburger-icon span:nth-child(2) {
+  opacity: 0;
+}
+.hamburger-btn[aria-expanded="true"] .hamburger-icon span:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+.hamburger-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 30;
+  display: grid;
+  gap: 4px;
+  min-width: 200px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-surface-rgb) / 0.97);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+.hamburger-menu-panel button {
+  min-height: 42px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  padding: 0 12px;
+  text-align: left;
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+}
+.hamburger-menu-panel button:hover,
+.hamburger-menu-panel button.is-active {
+  background: rgb(var(--color-accent-rgb) / 0.12);
+  color: var(--accent-strong);
+}
+
+/* ---------- Trader-level circular ring ---------- */
+.metrics-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.metric-level {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.metric-level span {
+  align-self: flex-start;
+}
+.trader-level {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.level-ring-track {
+  fill: none;
+  stroke: rgb(var(--color-white-rgb) / 0.08);
+  stroke-width: 10;
+}
+.level-ring-progress {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 60px 60px;
+  stroke: url(#levelGradient);
+  transition: stroke-dashoffset 400ms ease;
+}
+.trader-level-text {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  line-height: 1.1;
+}
+.trader-level-text strong {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-md);
+  font-weight: 700;
+}
+.trader-level-text span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+/* Tier colors applied as a class on #levelRingProgress by client.ts */
+.level-tier-bronze { stroke: #c98a4b !important; }
+.level-tier-silver { stroke: #b8c2cc !important; }
+.level-tier-gold { stroke: #f6c85f !important; }
+.level-tier-platinum { stroke: #7cf5c4 !important; }
+.level-tier-diamond { stroke: #22e08f !important; }
+
+/* ---------- Weekly P&L list ---------- */
+.weekly-pnl {
+  margin: 0 0 18px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-white-rgb) / 0.028);
+}
+.weekly-pnl-header h3 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+.weekly-pnl-header p {
+  margin: 6px 0 14px;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+}
+.weekly-pnl-list {
+  display: grid;
+  gap: 10px;
+}
+.weekly-pnl-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-white-rgb) / 0.025);
+}
+.weekly-pnl-row span {
+  font-weight: 800;
+}
+.weekly-pnl-row small {
+  color: var(--muted);
+}
+
 /* ---------- Light theme overrides ---------- */
 [data-theme="light"] {
   --color-bg-base: #f2f4f8;
