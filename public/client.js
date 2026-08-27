@@ -531,6 +531,7 @@
           return direction === "asc" ? compared : -compared;
         });
         updateHistorySortIndicators();
+        renderHistorySummary(trades);
         tbody.textContent = "";
         if (!trades.length) {
           const row = document.createElement("tr");
@@ -737,6 +738,7 @@
         renderMonthlyGoal(monthlyTotal);
         renderMonthlyCalendar(daily);
         renderMonthlyDayList(daily);
+        renderStreaks();
       }
       function renderMonthlyGoal(monthlyTotal) {
         const target = state.monthlyTarget;
@@ -850,6 +852,85 @@
         state.trades.forEach((trade) => pairMap.set(trade.pair, (pairMap.get(trade.pair) || 0) + trade.pnl));
         const best = Array.from(pairMap.entries()).sort((a, b) => b[1] - a[1])[0];
         return best ? `${best[0]} (${currency(best[1])})` : "-";
+      }
+      function tradesChronological(trades) {
+        return [...trades].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+      }
+      function profitFactor(trades) {
+        const grossProfit = trades.filter((t) => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0);
+        const grossLoss = Math.abs(trades.filter((t) => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0));
+        if (grossLoss <= 0) return grossProfit > 0 ? Infinity : 0;
+        return grossProfit / grossLoss;
+      }
+      function avgWinLoss(trades) {
+        const wins = trades.filter((t) => t.pnl > 0).map((t) => t.pnl);
+        const losses = trades.filter((t) => t.pnl < 0).map((t) => Math.abs(t.pnl));
+        const avgWin = wins.length ? wins.reduce((a, b) => a + b, 0) / wins.length : 0;
+        const avgLoss = losses.length ? losses.reduce((a, b) => a + b, 0) / losses.length : 0;
+        const ratio = avgLoss > 0 ? avgWin / avgLoss : avgWin > 0 ? Infinity : 0;
+        return { avgWin, avgLoss, ratio };
+      }
+      function formatRatio(value) {
+        if (!Number.isFinite(value)) return "\u221E";
+        if (value === 0) return "-";
+        return value.toFixed(2);
+      }
+      function currentTradeStreak(trades) {
+        const ordered = tradesChronological(trades).filter((t) => t.result !== "breakeven");
+        if (!ordered.length) return { type: "none", count: 0 };
+        const last = ordered[ordered.length - 1];
+        const type = last.result === "win" ? "win" : "loss";
+        let count = 0;
+        for (let i = ordered.length - 1; i >= 0; i -= 1) {
+          if (ordered[i].result !== last.result) break;
+          count += 1;
+        }
+        return { type, count };
+      }
+      function currentDayStreak(trades) {
+        const daily = /* @__PURE__ */ new Map();
+        trades.forEach((trade) => {
+          daily.set(trade.date, (daily.get(trade.date) || 0) + trade.pnl);
+        });
+        const days = Array.from(daily.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+        if (!days.length) return { type: "none", count: 0 };
+        const lastPnl = days[days.length - 1][1];
+        if (lastPnl === 0) return { type: "none", count: 0 };
+        const type = lastPnl > 0 ? "win" : "loss";
+        let count = 0;
+        for (let i = days.length - 1; i >= 0; i -= 1) {
+          const pnl = days[i][1];
+          const dayType = pnl > 0 ? "win" : pnl < 0 ? "loss" : "none";
+          if (dayType !== type) break;
+          count += 1;
+        }
+        return { type, count };
+      }
+      function streakLabel(streak, unit) {
+        if (streak.type === "none" || streak.count === 0) return "No streak";
+        const noun = streak.count === 1 ? unit.replace(/s$/, "") : unit;
+        return `${streak.count} ${streak.type === "win" ? "winning" : "losing"} ${noun}`;
+      }
+      function renderStreaks() {
+        const tradeStreak = currentTradeStreak(state.trades);
+        const dayStreak = currentDayStreak(state.trades);
+        const tradesEl = qs("#streakTrades");
+        tradesEl.textContent = streakLabel(tradeStreak, "trades");
+        tradesEl.classList.toggle("positive", tradeStreak.type === "win");
+        tradesEl.classList.toggle("negative", tradeStreak.type === "loss");
+        const daysEl = qs("#streakDays");
+        daysEl.textContent = streakLabel(dayStreak, "days");
+        daysEl.classList.toggle("positive", dayStreak.type === "win");
+        daysEl.classList.toggle("negative", dayStreak.type === "loss");
+      }
+      function renderHistorySummary(trades) {
+        const wins = trades.filter((t) => t.result === "win").length;
+        const total = trades.length;
+        const winRate = total ? wins / total * 100 : 0;
+        qs("#historySummaryCount").textContent = String(total);
+        qs("#historySummaryWinRate").textContent = percent(winRate);
+        qs("#historySummaryProfitFactor").textContent = formatRatio(profitFactor(trades));
+        qs("#historySummaryAvgWinLoss").textContent = formatRatio(avgWinLoss(trades).ratio);
       }
       function renderPairBreakdown() {
         const list = qs("#pairBreakdown");
