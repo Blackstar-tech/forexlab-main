@@ -443,12 +443,28 @@
         const averageRating = rated.length ? rated.reduce((sum, trade) => sum + trade.rating, 0) / rated.length : 0;
         return { total, wins, losses, breakeven, netPnl, winRate, averageRating };
       }
+      function amountMeter(value) {
+        if (value === 0) return 0;
+        return Math.max(16, Math.min(100, Math.abs(value) / 35));
+      }
+      function setMeter(selector, value, isNegative = false) {
+        const target = qs(selector);
+        const panel = target.closest(".metric, .stat-panel");
+        if (!panel) return;
+        const clamped = Math.max(0, Math.min(100, value));
+        panel.style.setProperty("--meter", `${clamped}%`);
+        panel.classList.toggle("is-negative-meter", isNegative);
+      }
       function renderDashboard() {
         const summary = stats();
         qs("#metricTrades").textContent = String(summary.total);
         qs("#metricWinRate").textContent = percent(summary.winRate);
         qs("#metricPnl").textContent = currency(summary.netPnl);
         qs("#metricRating").textContent = summary.averageRating ? summary.averageRating.toFixed(1) : "-";
+        setMeter("#metricTrades", summary.total ? Math.min(100, summary.total * 8) : 0);
+        setMeter("#metricWinRate", summary.winRate);
+        setMeter("#metricPnl", amountMeter(summary.netPnl), summary.netPnl < 0);
+        setMeter("#metricRating", summary.averageRating ? summary.averageRating / 5 * 100 : 0);
         renderTraderLevel();
       }
       function traderLevelInfo() {
@@ -711,6 +727,10 @@
         qs("#analyticsPnl").textContent = currency(summary.netPnl);
         qs("#analyticsWinRate").textContent = percent(summary.winRate);
         qs("#analyticsBestPair").textContent = bestPair();
+        setMeter("#analyticsRecord", summary.total ? summary.wins / summary.total * 100 : 0);
+        setMeter("#analyticsPnl", amountMeter(summary.netPnl), summary.netPnl < 0);
+        setMeter("#analyticsWinRate", summary.winRate);
+        setMeter("#analyticsBestPair", summary.total ? Math.min(100, summary.total * 8) : 0);
         renderEquityCurve();
         renderPairBreakdown();
       }
@@ -735,6 +755,10 @@
         qs("#monthlyTrades").textContent = String(monthTrades.length);
         qs("#monthlyDays").textContent = String(dailyValues.length);
         qs("#monthlyBestDay").textContent = bestDay ? `${dayLabel(bestDay[0])} ${currency(bestDay[1].pnl)}` : "-";
+        setMeter("#monthlyTotal", amountMeter(monthlyTotal), monthlyTotal < 0);
+        setMeter("#monthlyTrades", monthTrades.length ? Math.min(100, monthTrades.length * 10) : 0);
+        setMeter("#monthlyDays", dailyValues.length ? Math.min(100, dailyValues.length * 14) : 0);
+        setMeter("#monthlyBestDay", bestDay ? amountMeter(bestDay[1].pnl) : 0, Boolean(bestDay && bestDay[1].pnl < 0));
         renderMonthlyGoal(monthlyTotal);
         renderMonthlyCalendar(daily);
         renderMonthlyDayList(daily);
@@ -922,15 +946,23 @@
         daysEl.textContent = streakLabel(dayStreak, "days");
         daysEl.classList.toggle("positive", dayStreak.type === "win");
         daysEl.classList.toggle("negative", dayStreak.type === "loss");
+        setMeter("#streakTrades", tradeStreak.count ? Math.min(100, tradeStreak.count * 18) : 0, tradeStreak.type === "loss");
+        setMeter("#streakDays", dayStreak.count ? Math.min(100, dayStreak.count * 22) : 0, dayStreak.type === "loss");
       }
       function renderHistorySummary(trades) {
         const wins = trades.filter((t) => t.result === "win").length;
         const total = trades.length;
         const winRate = total ? wins / total * 100 : 0;
+        const factor = profitFactor(trades);
+        const averageWinLoss = avgWinLoss(trades).ratio;
         qs("#historySummaryCount").textContent = String(total);
         qs("#historySummaryWinRate").textContent = percent(winRate);
-        qs("#historySummaryProfitFactor").textContent = formatRatio(profitFactor(trades));
-        qs("#historySummaryAvgWinLoss").textContent = formatRatio(avgWinLoss(trades).ratio);
+        qs("#historySummaryProfitFactor").textContent = formatRatio(factor);
+        qs("#historySummaryAvgWinLoss").textContent = formatRatio(averageWinLoss);
+        setMeter("#historySummaryCount", total ? Math.min(100, total * 10) : 0);
+        setMeter("#historySummaryWinRate", winRate);
+        setMeter("#historySummaryProfitFactor", Number.isFinite(factor) ? Math.min(100, factor * 20) : 100);
+        setMeter("#historySummaryAvgWinLoss", Number.isFinite(averageWinLoss) ? Math.min(100, averageWinLoss * 22) : 100);
       }
       function renderPairBreakdown() {
         const list = qs("#pairBreakdown");
@@ -954,6 +986,8 @@
           row.querySelector("strong").textContent = `${item.count} trades`;
           row.querySelector("em").textContent = currency(item.pnl);
           row.querySelector("em").className = item.pnl >= 0 ? "positive" : "negative";
+          row.classList.toggle("is-negative-meter", item.pnl < 0);
+          row.style.setProperty("--meter", `${Math.max(14, Math.min(100, Math.abs(item.pnl) / 35))}%`);
           list.append(row);
         });
       }
@@ -1189,15 +1223,30 @@
         const range = max - min || 1;
         const width = 680;
         const height = 220;
-        const points = allValues.map((value, index) => {
+        const coordinates = allValues.map((value, index) => {
           const x = index / Math.max(1, allValues.length - 1) * width;
           const y = height - (value - min) / range * height;
-          return `${x.toFixed(1)},${y.toFixed(1)}`;
-        }).join(" ");
+          return { x, y, value };
+        });
+        const points = coordinates.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+        const areaPoints = `0,${height} ${points} ${width},${height}`;
+        const gridLines = [0.25, 0.5, 0.75].map((ratio) => `<line class="equity-gridline" x1="0" y1="${(height * ratio).toFixed(1)}" x2="${width}" y2="${(height * ratio).toFixed(1)}" />`).join("");
+        const nodes = coordinates.map(({ x, y }) => `<circle class="equity-point" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" />`).join("");
+        const trendClass = values[values.length - 1] < 0 ? "is-negative-chart" : "is-positive-chart";
         chart.innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Equity curve">
-      <line x1="0" y1="${height}" x2="${width}" y2="${height}" />
-      <polyline points="${points}" />
+    <svg class="${trendClass}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Equity curve">
+      <defs>
+        <linearGradient id="equityAreaFill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="currentColor" stop-opacity="0.55"></stop>
+          <stop offset="72%" stop-color="currentColor" stop-opacity="0.12"></stop>
+          <stop offset="100%" stop-color="currentColor" stop-opacity="0"></stop>
+        </linearGradient>
+      </defs>
+      ${gridLines}
+      <line class="equity-baseline" x1="0" y1="${height}" x2="${width}" y2="${height}" />
+      <polygon class="equity-area" points="${areaPoints}" />
+      <polyline class="equity-line" points="${points}" />
+      ${nodes}
     </svg>
   `;
       }
