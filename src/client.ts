@@ -949,61 +949,8 @@ function renderMonthlyPnl(): void {
   qs("#monthlyBestDay").textContent = bestDay ? `${dayLabel(bestDay[0])} ${currency(bestDay[1].pnl)}` : "-";
 
   renderMonthlyGoal(monthlyTotal);
-  renderWeeklyPnl(daily);
   renderMonthlyCalendar(daily);
   renderMonthlyDayList(daily);
-}
-
-function renderWeeklyPnl(daily: Map<string, DailyPnlSummary>): void {
-  const list = qs<HTMLDivElement>("#weeklyPnlList");
-  const { year, month } = parseMonthKey(state.selectedMonth);
-  const firstWeekday = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  type WeekBucket = { pnl: number; trades: number; startDay: number; endDay: number };
-  const weeks = new Map<number, WeekBucket>();
-
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    const weekIndex = Math.floor((day - 1 + firstWeekday) / 7);
-    const bucket = weeks.get(weekIndex) || { pnl: 0, trades: 0, startDay: day, endDay: day };
-    bucket.endDay = day;
-    const dateKey = `${state.selectedMonth}-${String(day).padStart(2, "0")}`;
-    const item = daily.get(dateKey);
-    if (item) {
-      bucket.pnl += item.pnl;
-      bucket.trades += item.trades;
-    }
-    weeks.set(weekIndex, bucket);
-  }
-
-  list.textContent = "";
-  const entries = Array.from(weeks.entries()).sort((a, b) => a[0] - b[0]);
-
-  if (!entries.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty-row monthly-empty";
-    empty.textContent = "No P&L logged for this month yet.";
-    list.append(empty);
-    return;
-  }
-
-  entries.forEach(([weekIndex, bucket], position) => {
-    const row = document.createElement("div");
-    row.className = "weekly-pnl-row";
-
-    const label = document.createElement("span");
-    label.textContent = `Week ${position + 1} (${bucket.startDay}\u2013${bucket.endDay})`;
-
-    const pnl = document.createElement("strong");
-    pnl.className = bucket.pnl >= 0 ? "positive" : "negative";
-    pnl.textContent = currency(bucket.pnl);
-
-    const count = document.createElement("small");
-    count.textContent = `${bucket.trades} trade${bucket.trades === 1 ? "" : "s"}`;
-
-    row.append(label, count, pnl);
-    list.append(row);
-  });
 }
 
 function renderMonthlyGoal(monthlyTotal: number): void {
@@ -1298,11 +1245,12 @@ function toggleTheme(): void {
   updateThemeToggleIcon();
 }
 function toggleSidebarNav(): void {
-  const nav = qs<HTMLElement>("#sideNav");
+  const app = qs<HTMLElement>("#appView");
   const button = qs<HTMLButtonElement>("#sidebarNavToggle");
-  const willOpen = !nav.classList.contains("is-open");
-  nav.classList.toggle("is-open", willOpen);
+  const willOpen = app.classList.contains("sidebar-collapsed");
+  app.classList.toggle("sidebar-collapsed", !willOpen);
   button.setAttribute("aria-expanded", String(willOpen));
+  button.setAttribute("aria-label", willOpen ? "Close navigation menu" : "Open navigation menu");
 }
 
 function toggleHamburgerMenu(forceClose = false): void {
@@ -1311,6 +1259,7 @@ function toggleHamburgerMenu(forceClose = false): void {
   const willOpen = forceClose ? false : panel.hasAttribute("hidden");
   panel.toggleAttribute("hidden", !willOpen);
   trigger.setAttribute("aria-expanded", String(willOpen));
+  trigger.setAttribute("aria-label", willOpen ? "Close menu" : "Open menu");
 }
 
 function renderCaseStudies(): void {
@@ -1611,6 +1560,10 @@ function bindEvents(): void {
     const panel = qs<HTMLElement>("#hamburgerMenuPanel");
     const wrap = target.closest(".hamburger-wrap");
     if (!wrap && !panel.hasAttribute("hidden")) toggleHamburgerMenu(true);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") toggleHamburgerMenu(true);
   });
 
   qsa<HTMLButtonElement>("[data-direction]").forEach((button) => {

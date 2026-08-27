@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Forex Lab Journal</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
@@ -95,7 +95,7 @@
     </section>
   </main>
 
-  <div id="appView" class="app-view" hidden>
+  <div id="appView" class="app-view sidebar-collapsed" hidden>
     <aside class="sidebar">
       <div class="sidebar-head">
         <div class="brand-mark small">FL</div>
@@ -107,7 +107,7 @@
           <span class="theme-toggle-icon" aria-hidden="true">🌙</span>
         </button>
       </div>
-      <button type="button" id="sidebarNavToggle" class="sidebar-nav-toggle" aria-expanded="true" aria-controls="sideNav">
+      <button type="button" id="sidebarNavToggle" class="sidebar-nav-toggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="sideNav">
         <span>Menu</span>
         <span class="sidebar-nav-toggle-icon" aria-hidden="true"></span>
       </button>
@@ -514,14 +514,6 @@
             </div>
           </section>
 
-          <section class="weekly-pnl" aria-label="Weekly P&L summary">
-            <div class="weekly-pnl-header">
-              <h3>Weekly P&amp;L</h3>
-              <p>Sum of profit and loss for each week in the selected month.</p>
-            </div>
-            <div id="weeklyPnlList" class="weekly-pnl-list"></div>
-          </section>
-
           <div id="monthlyCalendar" class="monthly-calendar" aria-label="Monthly P&L calendar"></div>
         </section>
 
@@ -644,28 +636,6 @@
       </section>
     </main>
     <button id="fabNewTrade" class="fab" type="button" aria-label="New trade">+</button>
-    <nav class="mobile-tab-bar" aria-label="Journal navigation">
-      <button type="button" data-tab="log" class="is-active">
-        <span aria-hidden="true">✏️</span>
-        <small>Log</small>
-      </button>
-      <button type="button" data-tab="history">
-        <span aria-hidden="true">📜</span>
-        <small>History</small>
-      </button>
-      <button type="button" data-tab="monthly">
-        <span aria-hidden="true">📅</span>
-        <small>Monthly</small>
-      </button>
-      <button type="button" data-tab="analytics">
-        <span aria-hidden="true">📊</span>
-        <small>Analytics</small>
-      </button>
-      <button type="button" data-tab="casestudy">
-        <span aria-hidden="true">📚</span>
-        <small>Case</small>
-      </button>
-    </nav>
   </div>
 
   <script src="/client.js"></script>

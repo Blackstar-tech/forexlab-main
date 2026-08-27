@@ -16,8 +16,9 @@ const GMAIL_USER = process.env.GMAIL_USER || "";
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || "";
 const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || "Forex Lab";
 const APP_URL = process.env.APP_URL || "";
+const useLocalDataStore = !process.env.VERCEL && process.env.USE_SUPABASE !== "true";
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
+if (!useLocalDataStore && (!SUPABASE_URL || !SUPABASE_KEY)) {
   console.error("Missing SUPABASE_URL or SUPABASE_KEY.");
 }
 
@@ -62,6 +63,7 @@ function getSupabase(): SupabaseClient {
 const publicDir = resolveProjectPath("public");
 const dataDir = process.env.VERCEL ? path.join(os.tmpdir(), "forexlab") : resolveProjectPath(".data");
 const uploadsDir = path.join(dataDir, "uploads");
+const dbFile = path.join(dataDir, "db.json");
 const sessionCookie = "fj_session";
 
 const maxBodyBytes = 10 * 1024 * 1024;
@@ -129,6 +131,28 @@ type AuthedRequest = {
   token: string;
 };
 
+type Session = {
+  token: string;
+  userId: string;
+  createdAt: string;
+};
+
+type PasswordReset = {
+  token: string;
+  userId: string;
+  expiresAt: string;
+  used: boolean;
+  createdAt: string;
+};
+
+type LocalDb = {
+  users: User[];
+  sessions: Session[];
+  trades: Trade[];
+  caseStudies: CaseStudy[];
+  passwordResets: PasswordReset[];
+};
+
 function makeId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${crypto.randomBytes(6).toString("hex")}`;
 }
@@ -153,6 +177,43 @@ function publicUser(user: User) {
     name: user.name,
     email: user.email
   };
+}
+
+function emptyLocalDb(): LocalDb {
+  return {
+    users: [],
+    sessions: [],
+    trades: [],
+    caseStudies: [],
+    passwordResets: []
+  };
+}
+
+function normalizeLocalDb(value: unknown): LocalDb {
+  const input = (value && typeof value === "object" ? value : {}) as Partial<LocalDb>;
+
+  return {
+    users: Array.isArray(input.users) ? input.users : [],
+    sessions: Array.isArray(input.sessions) ? input.sessions : [],
+    trades: Array.isArray(input.trades) ? input.trades : [],
+    caseStudies: Array.isArray(input.caseStudies) ? input.caseStudies : [],
+    passwordResets: Array.isArray(input.passwordResets) ? input.passwordResets : []
+  };
+}
+
+async function readLocalDb(): Promise<LocalDb> {
+  try {
+    const raw = await fs.promises.readFile(dbFile, "utf8");
+    return normalizeLocalDb(JSON.parse(raw));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return emptyLocalDb();
+    throw error;
+  }
+}
+
+async function writeLocalDb(db: LocalDb): Promise<void> {
+  await fs.promises.mkdir(dataDir, { recursive: true });
+  await fs.promises.writeFile(dbFile, `${JSON.stringify(db, null, 2)}\n`);
 }
 
 function titleCase(value: string): string {
@@ -401,6 +462,13 @@ async function requireAuth(req: IncomingMessage): Promise<AuthedRequest | null> 
   const token = cookies[sessionCookie];
   if (!token) return null;
 
+  if (useLocalDataStore) {
+    const db = await readLocalDb();
+    const session = db.sessions.find((item) => item.token === token);
+    const user = session ? db.users.find((item) => item.id === session.userId) : null;
+    return session && user ? { user, token } : null;
+  }
+
   const { data: session } = await getSupabase()
     .from("sessions")
     .select("*, users(*)")
@@ -439,6 +507,34 @@ async function handleSignup(req: IncomingMessage, res: ServerResponse): Promise<
 
   if (password.length < 6) {
     sendError(res, 400, "Password must be at least 6 characters.");
+    return;
+  }
+
+  if (useLocalDataStore) {
+    const db = await readLocalDb();
+    if (db.users.some((user) => user.email.toLowerCase() === email)) {
+      sendError(res, 409, "That email is already registered.");
+      return;
+    }
+
+    const passwordData = createPasswordHash(password);
+    const createdAt = new Date().toISOString();
+    const user: User = {
+      id: makeId("usr"),
+      name,
+      email,
+      salt: passwordData.salt,
+      passwordHash: passwordData.passwordHash,
+      createdAt
+    };
+    const token = crypto.randomBytes(32).toString("hex");
+
+    db.users.push(user);
+    db.sessions.push({ token, userId: user.id, createdAt });
+    await writeLocalDb(db);
+    await sendWelcomeEmail({ name: user.name, email: user.email });
+    setSessionCookie(res, token);
+    sendJson(res, 201, { user: publicUser(user) });
     return;
   }
 
@@ -496,6 +592,23 @@ async function handleLogin(req: IncomingMessage, res: ServerResponse): Promise<v
   const body = (await readBody(req)) as Record<string, unknown>;
   const email = toText(body.email).toLowerCase();
   const password = toText(body.password);
+
+  if (useLocalDataStore) {
+    const db = await readLocalDb();
+    const user = db.users.find((item) => item.email.toLowerCase() === email);
+
+    if (!user || !verifyPassword(password, user)) {
+      sendError(res, 401, "Incorrect email or password.");
+      return;
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+    db.sessions.push({ token, userId: user.id, createdAt: new Date().toISOString() });
+    await writeLocalDb(db);
+    setSessionCookie(res, token);
+    sendJson(res, 200, { user: publicUser(user) });
+    return;
+  }
 
   const { data: rawUser } = await getSupabase().from("users").select("*").eq("email", email).single();
 
