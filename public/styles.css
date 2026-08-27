@@ -686,6 +686,19 @@ textarea:focus {
   margin-bottom: 18px;
 }
 
+.streak-grid,
+.history-summary {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.streak-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.history-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .metric,
 .stat-panel {
   padding: 18px;
@@ -1386,7 +1399,8 @@ td {
 
   .analytics-grid,
   .monthly-grid,
-  .analytics-layout {
+  .analytics-layout,
+  .history-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1441,7 +1455,9 @@ td {
   .goal-metrics,
   .analytics-layout,
   .form-grid,
-  .form-grid.three {
+  .form-grid.three,
+  .streak-grid,
+  .history-summary {
     grid-template-columns: 1fr;
   }
 

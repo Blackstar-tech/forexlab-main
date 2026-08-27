@@ -412,7 +412,24 @@
               </select>
             </div>
           </div>
-
+          <section class="history-summary" aria-label="Filtered trade summary">
+            <article class="panel stat-panel">
+              <span>Filtered trades</span>
+              <strong id="historySummaryCount">0</strong>
+            </article>
+            <article class="panel stat-panel">
+              <span>Win rate</span>
+              <strong id="historySummaryWinRate">0%</strong>
+            </article>
+            <article class="panel stat-panel">
+              <span>Profit factor</span>
+              <strong id="historySummaryProfitFactor">-</strong>
+            </article>
+            <article class="panel stat-panel">
+              <span>Avg win : loss</span>
+              <strong id="historySummaryAvgWinLoss">-</strong>
+            </article>
+          </section>
           <div class="table-wrap">
             <table>
               <thead>
@@ -465,7 +482,16 @@
               <strong id="monthlyBestDay">-</strong>
             </article>
           </section>
-
+          <section class="streak-grid" aria-label="Trading streaks">
+            <article class="panel stat-panel">
+              <span>Trade streak</span>
+              <strong id="streakTrades">No streak</strong>
+            </article>
+            <article class="panel stat-panel">
+              <span>Day streak</span>
+              <strong id="streakDays">No streak</strong>
+            </article>
+          </section>
           <section class="monthly-goal" aria-labelledby="monthlyGoalTitle">
             <div class="monthly-goal-header">
               <div>
