@@ -72,7 +72,7 @@ type CaseStudy = {
   direction: "buy" | "sell";
   setup: string;
   notes: string;
-  screenshot: string | null;
+  screenshots: string[];
   createdAt: string;
 };
 
@@ -102,6 +102,7 @@ const state: {
   historySort: { key: string; direction: "asc" | "desc" };
   caseStudies: CaseStudy[];
   caseStudyDirection: "buy" | "sell";
+  caseStudyScreenshots: string[];
 } = {
   user: null,
   trades: [],
@@ -119,7 +120,8 @@ const state: {
   monthlyTarget: { mode: "currency", value: 0, baseBalance: null },
   historySort: { key: "date", direction: "desc" },
   caseStudies: [],
-  caseStudyDirection: "buy"
+  caseStudyDirection: "buy",
+  caseStudyScreenshots: []
 };
 
 type CustomSelect = {
@@ -370,6 +372,75 @@ async function uploadShot(file: File): Promise<void> {
 function removeShot(): void {
   state.screenshots[state.activeShot] = null;
   renderShotPreview();
+}
+
+function renderCaseStudyScreenshotPreview(): void {
+  const empty = qs<HTMLDivElement>("#csShotEmptyState");
+  const preview = qs<HTMLDivElement>("#csShotPreviewState");
+  const gallery = qs<HTMLDivElement>("#csShotGallery");
+  const hasScreenshots = state.caseStudyScreenshots.length > 0;
+
+  gallery.textContent = "";
+
+  if (hasScreenshots) {
+    empty.setAttribute("hidden", "true");
+    preview.removeAttribute("hidden");
+  } else {
+    preview.setAttribute("hidden", "true");
+    empty.removeAttribute("hidden");
+  }
+
+  state.caseStudyScreenshots.forEach((url, index) => {
+    const thumb = document.createElement("div");
+    thumb.className = "cs-shot-thumb";
+
+    const image = document.createElement("img");
+    image.src = url;
+    image.alt = `Case study screenshot ${index + 1}`;
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "cs-shot-thumb-remove";
+    removeButton.textContent = "×";
+    removeButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      removeCaseStudyScreenshot(index);
+    });
+
+    thumb.append(image, removeButton);
+    gallery.append(thumb);
+  });
+}
+
+async function uploadCaseStudyScreenshots(files: FileList | File[]): Promise<void> {
+  const selectedFiles = Array.from(files);
+  const imageFiles = selectedFiles.filter((file) => file.type.startsWith("image/"));
+
+  if (imageFiles.length !== selectedFiles.length) {
+    showToast("Please choose image files.");
+  }
+
+  if (!imageFiles.length) {
+    return;
+  }
+
+  for (const file of imageFiles) {
+    const dataUrl = await fileToDataUrl(file);
+    const response = await api<{ url: string }>("/api/uploads", {
+      method: "POST",
+      body: JSON.stringify({ dataUrl })
+    });
+
+    state.caseStudyScreenshots.push(response.url);
+  }
+
+  renderCaseStudyScreenshotPreview();
+  showToast(`${imageFiles.length} screenshot${imageFiles.length === 1 ? "" : "s"} attached.`);
+}
+
+function removeCaseStudyScreenshot(index: number): void {
+  state.caseStudyScreenshots.splice(index, 1);
+  renderCaseStudyScreenshotPreview();
 }
 
 function resetTradeForm(): void {
@@ -800,13 +871,115 @@ function badgeCell(text: string, tone: string): HTMLTableCellElement {
 
 function actionCell(id: string): HTMLTableCellElement {
   const cell = document.createElement("td");
+  cell.className = "actions-cell";
+
+  const viewButton = document.createElement("button");
+  viewButton.type = "button";
+  viewButton.className = "ghost compact view-trade-btn";
+  viewButton.dataset.viewTrade = id;
+  viewButton.textContent = "View";
+
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "ghost danger";
+  button.className = "ghost danger compact";
   button.dataset.deleteTrade = id;
   button.textContent = "Delete";
-  cell.append(button);
+
+  cell.append(viewButton, button);
   return cell;
+}
+
+function fieldValue(label: string, value: string): string {
+  return `<div class="trade-detail-field"><span>${label}</span><strong>${value}</strong></div>`;
+}
+
+function renderTradeDetail(trade: Trade): void {
+  const body = qs<HTMLDivElement>("#tradeDetailBody");
+  qs<HTMLHeadingElement>("#tradeDetailTitle").textContent = `${trade.pair} · ${trade.date}`;
+
+  const overviewFields = [
+    fieldValue("Date", `${trade.date}${trade.time ? ` ${trade.time}` : ""}`),
+    fieldValue("Session", trade.session || "-"),
+    fieldValue("Direction", trade.direction === "buy" ? "Buy / Long" : "Sell / Short"),
+    fieldValue("Result", trade.result),
+    fieldValue("P&L", currency(trade.pnl)),
+    fieldValue("Rating", trade.rating ? `${trade.rating}/5` : "-")
+  ].join("");
+
+  const numbersFields = [
+    fieldValue("Entry", trade.entryPrice != null ? String(trade.entryPrice) : "-"),
+    fieldValue("Stop loss", trade.stopLoss != null ? String(trade.stopLoss) : "-"),
+    fieldValue("Take profit", trade.takeProfit != null ? String(trade.takeProfit) : "-"),
+    fieldValue("Lot size", trade.lotSize != null ? String(trade.lotSize) : "-"),
+    fieldValue("Risk %", trade.riskPercent != null ? String(trade.riskPercent) : "-"),
+    fieldValue("Planned R:R", trade.plannedRr ? `1:${trade.plannedRr}` : "-"),
+    fieldValue("R:R achieved", trade.rrAchieved || "-"),
+    fieldValue("Pips", trade.pips != null ? String(trade.pips) : "-"),
+    fieldValue("Setup", trade.setup || "-")
+  ].join("");
+
+  const psychFields = [
+    fieldValue("Emotion", trade.emotion || "-"),
+    fieldValue("Sleep quality", trade.sleepQuality || "-"),
+    fieldValue("Confidence", trade.confidence || "-")
+  ].join("");
+
+  const screenshots = trade.screenshots || { before: null, after: null, analysis: null };
+  const shotEntries: [string, string | null | undefined][] = [
+    ["Before entry", screenshots.before],
+    ["After exit", screenshots.after],
+    ["Analysis", screenshots.analysis]
+  ];
+  const shotsHtml = shotEntries
+    .filter(([, url]) => Boolean(url))
+    .map(([label, url]) => `
+      <figure>
+        <a href="${url}" target="_blank" rel="noopener"><img src="${url}" alt="${label}"></a>
+        <figcaption>${label}</figcaption>
+      </figure>
+    `)
+    .join("");
+
+  body.innerHTML = `
+    <section class="trade-detail-section">
+      <h3>Overview</h3>
+      <div class="trade-detail-grid">${overviewFields}</div>
+    </section>
+    <section class="trade-detail-section">
+      <h3>Trade numbers</h3>
+      <div class="trade-detail-grid">${numbersFields}</div>
+    </section>
+    <section class="trade-detail-section">
+      <h3>Psychology</h3>
+      <div class="trade-detail-grid">${psychFields}</div>
+    </section>
+    ${trade.preTradeNotes ? `
+      <section class="trade-detail-section">
+        <h3>Pre-trade notes</h3>
+        <div class="trade-detail-notes">${trade.preTradeNotes}</div>
+      </section>` : ""}
+    ${trade.notes ? `
+      <section class="trade-detail-section">
+        <h3>Post-trade notes</h3>
+        <div class="trade-detail-notes">${trade.notes}</div>
+      </section>` : ""}
+    ${shotsHtml ? `
+      <section class="trade-detail-section">
+        <h3>Screenshots</h3>
+        <div class="trade-detail-shots">${shotsHtml}</div>
+      </section>` : ""}
+  `;
+}
+
+function openTradeDetail(id: string): void {
+  const trade = state.trades.find((t) => t.id === id);
+  if (!trade) return;
+  renderTradeDetail(trade);
+  qs<HTMLDivElement>("#tradeDetailModal").removeAttribute("hidden");
+}
+
+function closeTradeDetail(): void {
+  qs<HTMLDivElement>("#tradeDetailModal").setAttribute("hidden", "true");
 }
 
 function syncCustomSelect(custom: CustomSelect): void {
@@ -1417,6 +1590,38 @@ function renderCaseStudies(): void {
   state.caseStudies.forEach((item) => {
     const row = document.createElement("div");
     row.className = "case-study-row";
+    const screenshots = Array.isArray(item.screenshots) ? item.screenshots : [];
+
+    if (screenshots.length > 0) {
+      row.classList.add("has-image");
+
+      const thumbStrip = document.createElement("div");
+      thumbStrip.className = "cs-thumb-strip";
+
+      screenshots.slice(0, 3).forEach((url, index) => {
+        const thumbLink = document.createElement("a");
+        thumbLink.href = url;
+        thumbLink.target = "_blank";
+        thumbLink.rel = "noopener";
+
+        const thumbImg = document.createElement("img");
+        thumbImg.className = "cs-thumb";
+        thumbImg.src = url;
+        thumbImg.alt = `${item.pair} ${item.setup} screenshot ${index + 1}`;
+
+        thumbLink.append(thumbImg);
+        thumbStrip.append(thumbLink);
+      });
+
+      if (screenshots.length > 3) {
+        const more = document.createElement("span");
+        more.className = "cs-thumb-more";
+        more.textContent = `+${screenshots.length - 3}`;
+        thumbStrip.append(more);
+      }
+
+      row.append(thumbStrip);
+    }
 
     const badge = document.createElement("span");
     badge.className = `badge ${item.direction}`;
@@ -1461,7 +1666,7 @@ function caseStudyPayload(): Record<string, unknown> {
     direction: state.caseStudyDirection,
     setup: qs<HTMLInputElement>("#csSetup").value,
     notes: qs<HTMLTextAreaElement>("#csNotes").value,
-    screenshot: null
+    screenshots: state.caseStudyScreenshots
   };
 }
 
@@ -1469,8 +1674,10 @@ function resetCaseStudyForm(): void {
   qs<HTMLFormElement>("#caseStudyForm").reset();
   syncAllCustomSelects();
   state.caseStudyDirection = "buy";
+  state.caseStudyScreenshots = [];
   setSegment("csdirection", "buy");
   qs<HTMLInputElement>("#csDate").value = new Date().toISOString().slice(0, 10);
+  renderCaseStudyScreenshotPreview();
 }
 
 async function loadCaseStudies(): Promise<void> {
@@ -1802,6 +2009,34 @@ function bindEvents(): void {
     if (file) uploadShot(file).catch((error) => showToast(error.message));
   });
 
+  qs<HTMLInputElement>("#csShotFileInput").addEventListener("change", (event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    if (input.files?.length) uploadCaseStudyScreenshots(input.files).catch((error) => showToast(error.message));
+    input.value = "";
+  });
+
+  qs<HTMLButtonElement>("#csShotAddMoreButton").addEventListener("click", (event) => {
+    event.stopPropagation();
+    qs<HTMLInputElement>("#csShotFileInput").click();
+  });
+
+  qs<HTMLDivElement>("#csShotEmptyState").addEventListener("click", () => {
+    qs<HTMLInputElement>("#csShotFileInput").click();
+  });
+
+  const caseStudyDropzone = qs<HTMLDivElement>("#csShotDropzone");
+  caseStudyDropzone.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    caseStudyDropzone.classList.add("is-dragover");
+  });
+  caseStudyDropzone.addEventListener("dragleave", () => caseStudyDropzone.classList.remove("is-dragover"));
+  caseStudyDropzone.addEventListener("drop", (event) => {
+    event.preventDefault();
+    caseStudyDropzone.classList.remove("is-dragover");
+    const files = event.dataTransfer?.files;
+    if (files?.length) uploadCaseStudyScreenshots(files).catch((error) => showToast(error.message));
+  });
+
   ["#entryPrice", "#stopLoss", "#takeProfit"].forEach((selector) => {
     qs<HTMLInputElement>(selector).addEventListener("input", updateRr);
   });
@@ -1877,6 +2112,24 @@ function bindEvents(): void {
     if (button?.dataset.deleteTrade) {
       deleteTrade(button.dataset.deleteTrade).catch((error) => showToast(error.message));
     }
+  });
+
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    const viewButton = target.closest<HTMLButtonElement>("[data-view-trade]");
+    if (viewButton?.dataset.viewTrade) {
+      openTradeDetail(viewButton.dataset.viewTrade);
+    }
+  });
+
+  qs<HTMLButtonElement>("#tradeDetailClose").addEventListener("click", closeTradeDetail);
+
+  qs<HTMLDivElement>("#tradeDetailModal").addEventListener("click", (event) => {
+    if (event.target === qs<HTMLDivElement>("#tradeDetailModal")) closeTradeDetail();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeTradeDetail();
   });
 
   qsa<HTMLTableCellElement>("th[data-sort]").forEach((th) => {
@@ -1962,6 +2215,7 @@ async function init(): Promise<void> {
   setToday();
   updateRr();
   renderShotPreview();
+  renderCaseStudyScreenshotPreview();
   qs<HTMLInputElement>("#csDate").value = new Date().toISOString().slice(0, 10);
 
   if (window.location.pathname === "/reset-password") {

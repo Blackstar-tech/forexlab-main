@@ -652,6 +652,23 @@
               Setup / pattern observed
               <input id="csSetup" type="text" placeholder="e.g. Double top at resistance, failed breakout" required>
             </label>
+            <div class="mini-header"><span>Setup screenshot (optional)</span></div>
+            <div id="csShotDropzone" class="dropzone">
+              <input id="csShotFileInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+
+              <div id="csShotEmptyState" class="dropzone-empty">
+                <span class="dropzone-icon">🖼️</span>
+                <p>Drop a chart screenshot here</p>
+                <small>Drag &amp; drop or click to browse · PNG, JPG, WEBP</small>
+                <button type="button" id="csShotChooseButton" class="ghost">Choose file</button>
+              </div>
+
+              <div id="csShotPreviewState" class="dropzone-preview" hidden>
+                <div id="csShotGallery" class="cs-shot-gallery"></div>
+                <button type="button" id="csShotAddMoreButton" class="ghost">Add more</button>
+              </div>
+            </div>
+
             <label style="margin-top: 14px;">
               Notes — why didn't you take it? What would confirm entry next time?
               <textarea id="csNotes" rows="3"></textarea>
@@ -673,6 +690,16 @@
       </section>
     </main>
     <button id="fabNewTrade" class="fab" type="button" aria-label="New trade">+</button>
+  </div>
+
+  <div id="tradeDetailModal" class="trade-detail-backdrop" hidden>
+    <div class="trade-detail-panel" role="dialog" aria-modal="true" aria-labelledby="tradeDetailTitle">
+      <div class="trade-detail-header">
+        <h2 id="tradeDetailTitle">Trade detail</h2>
+        <button type="button" id="tradeDetailClose" class="ghost compact" aria-label="Close">✕</button>
+      </div>
+      <div id="tradeDetailBody" class="trade-detail-body"></div>
+    </div>
   </div>
 
   <script src="/client.js"></script>
