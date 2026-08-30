@@ -1,0 +1,26 @@
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:2009:16)
+    at listenInCluster (node:net:2066:12)
+    at Server.listen (node:net:2171:7)
+    at user (C:\Users\WILLIAM\Downloads\forexlab-main\src\server.ts:1253:6)
+    at Object.<anonymous> (C:\Users\WILLIAM\Downloads\forexlab-main\src\server.ts:1263:16)
+    at Module._compile (node:internal/modules/cjs/loader:1854:14)
+    at Object.transformer (C:\Users\WILLIAM\Downloads\forexlab-main\node_modules\tsx\dist\register-BcxQ17Jo.cjs:9:3339)
+    at Module.load (node:internal/modules/cjs/loader:1577:32)
+    at Module._load (node:internal/modules/cjs/loader:1379:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2045:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+
+Node.js v24.17.0

@@ -1,0 +1,13 @@
+
+> forexlab-journal@1.0.0 dev
+> tsx --watch src/server.ts
+
+◇ injected env (4) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+Trade journal running at http://localhost:3000
+Restarting 'src/server.ts'
+Restarting 'src/server.ts'
+◇ injected env (4) from .env // tip: ⌘ suppress logs { quiet: true }
+Trade journal running at http://localhost:3000
+Restarting 'src/server.ts'
+◇ injected env (4) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+Failed running 'src/server.ts'. Waiting for file changes before restarting...

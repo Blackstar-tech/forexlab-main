@@ -77,6 +77,8 @@ type CaseStudy = {
 };
 
 const monthlyTargetStorageKey = "forexlab.monthlyTargets.v1";
+const accountBalanceStorageKey = "forexlab.accountBalance.v1";
+const winRateGaugeRadius = 90;
 const themeStorageKey = "forexlab.theme";
 function applyStoredTheme(): void {
   const stored = localStorage.getItem(themeStorageKey);
@@ -99,6 +101,7 @@ const state: {
   screenshots: TradeScreenshots;
   resetToken: string;
   monthlyTarget: MonthlyTarget;
+  accountBalance: number;
   historySort: { key: string; direction: "asc" | "desc" };
   caseStudies: CaseStudy[];
   caseStudyDirection: "buy" | "sell";
@@ -118,6 +121,7 @@ const state: {
   screenshots: { before: null, after: null, analysis: null },
   resetToken: "",
   monthlyTarget: { mode: "currency", value: 0, baseBalance: null },
+  accountBalance: 0,
   historySort: { key: "date", direction: "desc" },
   caseStudies: [],
   caseStudyDirection: "buy",
@@ -583,6 +587,51 @@ function writeMonthlyTargetStore(store: Record<string, MonthlyTarget>): void {
   localStorage.setItem(monthlyTargetStorageKey, JSON.stringify(store));
 }
 
+function accountBalanceStoreKey(): string {
+  return `${accountBalanceStorageKey}:${state.user?.id || "local"}`;
+}
+
+function loadAccountBalance(): void {
+  const raw = localStorage.getItem(accountBalanceStoreKey());
+  const parsed = raw ? Number(raw) : 0;
+  state.accountBalance = Number.isFinite(parsed) ? parsed : 0;
+  renderAccountBalance();
+}
+
+function saveAccountBalance(value: number): void {
+  state.accountBalance = value;
+  localStorage.setItem(accountBalanceStoreKey(), String(value));
+  renderAccountBalance();
+}
+
+function renderAccountBalance(): void {
+  qs<HTMLElement>("#metricBalance").textContent = currency(state.accountBalance);
+}
+
+function openEditBalance(): void {
+  qs<HTMLInputElement>("#editBalanceInput").value = state.accountBalance > 0 ? String(state.accountBalance) : "";
+  qs<HTMLFormElement>("#editBalanceForm").removeAttribute("hidden");
+  qs<HTMLButtonElement>("#editBalanceButton").setAttribute("hidden", "true");
+  qs<HTMLInputElement>("#editBalanceInput").focus();
+}
+
+function closeEditBalance(): void {
+  qs<HTMLFormElement>("#editBalanceForm").setAttribute("hidden", "true");
+  qs<HTMLButtonElement>("#editBalanceButton").removeAttribute("hidden");
+}
+
+function handleEditBalanceSave(event: SubmitEvent): void {
+  event.preventDefault();
+  const value = Number(qs<HTMLInputElement>("#editBalanceInput").value);
+  if (!Number.isFinite(value) || value < 0) {
+    showToast("Enter a valid balance.");
+    return;
+  }
+  saveAccountBalance(value);
+  closeEditBalance();
+  showToast("Account balance updated.");
+}
+
 function loadMonthlyTargetForSelectedMonth(): void {
   const store = readMonthlyTargetStore();
   state.monthlyTarget = store[monthlyTargetStoreKey()] || defaultMonthlyTarget();
@@ -715,6 +764,7 @@ function renderDashboard(): void {
   qs("#metricRating").textContent = summary.averageRating ? summary.averageRating.toFixed(1) : "-";
   setMeter("#metricTrades", summary.total ? Math.min(100, summary.total * 8) : 0);
   setMeter("#metricWinRate", summary.winRate);
+  renderWinRateGauge(summary);
   setMeter("#metricPnl", amountMeter(summary.netPnl), summary.netPnl < 0);
   setMeter("#metricRating", summary.averageRating ? (summary.averageRating / 5) * 100 : 0);
   renderTraderLevel();
@@ -731,6 +781,32 @@ function traderLevelInfo(): { score: number; tier: string; label: string } {
   else if (score >= 40) { tier = "gold"; label = "Gold"; }
   else if (score >= 20) { tier = "silver"; label = "Silver"; }
   return { score, tier, label };
+}
+
+function renderWinRateGauge(summary: ReturnType<typeof stats>): void {
+  const total = summary.total;
+  const totalLength = Math.PI * winRateGaugeRadius;
+  const winLen = total ? (summary.wins / total) * totalLength : 0;
+  const beLen = total ? (summary.breakeven / total) * totalLength : 0;
+  const lossLen = total ? (summary.losses / total) * totalLength : 0;
+
+  const winArc = document.querySelector<SVGPathElement>("#gaugeWinArc");
+  const beArc = document.querySelector<SVGPathElement>("#gaugeBreakevenArc");
+  const lossArc = document.querySelector<SVGPathElement>("#gaugeLossArc");
+  if (!winArc || !beArc || !lossArc) return;
+
+  winArc.style.strokeDasharray = `${winLen} ${totalLength - winLen}`;
+  winArc.style.strokeDashoffset = "0";
+
+  beArc.style.strokeDasharray = `${beLen} ${totalLength - beLen}`;
+  beArc.style.strokeDashoffset = `${-winLen}`;
+
+  lossArc.style.strokeDasharray = `${lossLen} ${totalLength - lossLen}`;
+  lossArc.style.strokeDashoffset = `${-(winLen + beLen)}`;
+
+  qs<HTMLElement>("#legendWins").textContent = String(summary.wins);
+  qs<HTMLElement>("#legendBreakeven").textContent = String(summary.breakeven);
+  qs<HTMLElement>("#legendLosses").textContent = String(summary.losses);
 }
 
 function renderTraderLevel(): void {
@@ -1805,6 +1881,7 @@ async function handleLogin(event: SubmitEvent): Promise<void> {
   state.user = response.user;
   showApp();
   await loadTrades();
+  loadAccountBalance();
   await loadCaseStudies();
   showToast("Signed in.");
 }
@@ -1826,6 +1903,7 @@ async function handleSignup(event: SubmitEvent): Promise<void> {
   state.user = response.user;
   showApp();
   await loadTrades();
+  loadAccountBalance();
   await loadCaseStudies();
   showToast("Account created.");
 }
@@ -2198,6 +2276,10 @@ function bindEvents(): void {
   qs<HTMLFormElement>("#editNameForm").addEventListener("submit", (event) => {
     handleEditNameSave(event).catch((error) => showToast(error.message));
   });
+
+  qs<HTMLButtonElement>("#editBalanceButton").addEventListener("click", openEditBalance);
+  qs<HTMLButtonElement>("#editBalanceCancel").addEventListener("click", closeEditBalance);
+  qs<HTMLFormElement>("#editBalanceForm").addEventListener("submit", handleEditBalanceSave);
 }
 
 async function init(): Promise<void> {
@@ -2233,6 +2315,7 @@ async function init(): Promise<void> {
     state.user = response.user;
     showApp();
     await loadTrades();
+    loadAccountBalance();
     await loadCaseStudies();
   } catch {
     showAuth();

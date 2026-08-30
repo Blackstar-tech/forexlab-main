@@ -122,7 +122,7 @@ type CaseStudy = {
   direction: "buy" | "sell";
   setup: string;
   notes: string;
-  screenshot: string | null;
+  screenshots: string[];
   createdAt: string;
 };
 
@@ -455,6 +455,22 @@ function toScreenshots(value: unknown): TradeScreenshots {
     after: toText(input.after) || null,
     analysis: toText(input.analysis) || null
   };
+}
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+}
+
+function parseStoredScreenshots(raw: unknown): string[] {
+  if (typeof raw !== "string" || !raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return toStringArray(parsed);
+  } catch {
+    // Legacy rows stored a single plain URL string, not JSON - treat it as a one-item array.
+    return [raw];
+  }
 }
 
 async function requireAuth(req: IncomingMessage): Promise<AuthedRequest | null> {
@@ -815,7 +831,7 @@ async function handleCreateCaseStudy(req: IncomingMessage, res: ServerResponse, 
     direction: body.direction === "sell" ? "sell" : "buy",
     setup: toText(body.setup),
     notes: toText(body.notes),
-    screenshot: toText(body.screenshot) || null,
+    screenshot: JSON.stringify(toStringArray(body.screenshots)),
     created_at: new Date().toISOString()
   };
 
@@ -841,7 +857,7 @@ async function handleCreateCaseStudy(req: IncomingMessage, res: ServerResponse, 
     direction: data.direction,
     setup: data.setup,
     notes: data.notes || "",
-    screenshot: data.screenshot,
+    screenshots: parseStoredScreenshots(data.screenshot),
     createdAt: data.created_at
   };
 
@@ -869,7 +885,7 @@ async function handleCaseStudies(req: IncomingMessage, res: ServerResponse, auth
     direction: c.direction,
     setup: c.setup,
     notes: c.notes || "",
-    screenshot: c.screenshot,
+    screenshots: parseStoredScreenshots(c.screenshot),
     createdAt: c.created_at
   }));
 
