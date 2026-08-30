@@ -46,7 +46,9 @@ type ApiError = {
 
 type AuthMode = "login" | "signup" | "forgot" | "reset";
 
-type JournalTab = "log" | "history" | "monthly" | "analytics" | "casestudy";
+declare const Chart: any;
+
+type JournalTab = "dashboard" | "log" | "history" | "monthly" | "analytics" | "casestudy";
 
 type MonthlyTargetMode = "currency" | "percent";
 
@@ -279,6 +281,7 @@ function setTab(tab: JournalTab): void {
     panel.classList.toggle("is-active", panel.id === `tab-${tab}`);
   });
 
+  if (tab === "dashboard") renderDashboardTab();
   if (tab === "history") renderHistory();
   if (tab === "monthly") renderMonthlyPnl();
   if (tab === "analytics") renderAnalytics();
@@ -1195,6 +1198,201 @@ function renderAnalytics(): void {
   renderPairBreakdown();
 }
 
+function dailyPnlSeries(): { date: string; pnl: number }[] {
+  const daily = new Map<string, number>();
+  tradesChronological(state.trades).forEach((trade) => {
+    daily.set(trade.date, (daily.get(trade.date) || 0) + trade.pnl);
+  });
+  return Array.from(daily.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, pnl]) => ({ date, pnl }));
+}
+
+function cumulativePnlSeries(): { date: string; cumulative: number }[] {
+  let running = 0;
+  return dailyPnlSeries().map(({ date, pnl }) => {
+    running += pnl;
+    return { date, cumulative: running };
+  });
+}
+
+function maxDrawdown(series: number[]): number {
+  let peak = 0;
+  let maxDd = 0;
+  series.forEach((value) => {
+    if (value > peak) peak = value;
+    const drawdown = peak - value;
+    if (drawdown > maxDd) maxDd = drawdown;
+  });
+  return maxDd;
+}
+
+function consistencyScore(dailyPnls: number[]): number {
+  if (dailyPnls.length < 2) return 50;
+  const mean = dailyPnls.reduce((a, b) => a + b, 0) / dailyPnls.length;
+  const variance = dailyPnls.reduce((sum, v) => sum + (v - mean) ** 2, 0) / dailyPnls.length;
+  const stdDev = Math.sqrt(variance);
+  const denominator = Math.abs(mean) || 1;
+  const volatilityRatio = stdDev / denominator;
+  return Math.max(0, Math.min(100, 100 - volatilityRatio * 12));
+}
+
+function forexLabScore(): {
+  overall: number;
+  winRate: number;
+  profitFactor: number;
+  avgWinLoss: number;
+  consistency: number;
+  maxDrawdownScore: number;
+  recoveryFactor: number;
+} {
+  const summary = stats();
+  const factor = profitFactor(state.trades);
+  const ratio = avgWinLoss(state.trades).ratio;
+  const cumulative = cumulativePnlSeries().map((p) => p.cumulative);
+  const dd = maxDrawdown(cumulative);
+  const netPnl = summary.netPnl;
+  const dailyPnls = dailyPnlSeries().map((d) => d.pnl);
+
+  const winRateScore = Math.max(0, Math.min(100, summary.winRate));
+  const profitFactorScore = Number.isFinite(factor) ? Math.max(0, Math.min(100, factor * 25)) : 100;
+  const avgWinLossScore = Number.isFinite(ratio) ? Math.max(0, Math.min(100, ratio * 25)) : 100;
+  const consistency = consistencyScore(dailyPnls);
+  const maxDrawdownScore =
+    dd > 0 ? Math.max(0, 100 - Math.min(100, (dd / (Math.abs(netPnl) || dd || 1)) * 50)) : 100;
+  const recoveryFactorRaw = dd > 0 ? netPnl / dd : netPnl > 0 ? Infinity : 0;
+  const recoveryFactorScore = Number.isFinite(recoveryFactorRaw)
+    ? Math.max(0, Math.min(100, recoveryFactorRaw * 20))
+    : 100;
+
+  const overall =
+    (winRateScore + profitFactorScore + avgWinLossScore + consistency + maxDrawdownScore + recoveryFactorScore) /
+    6;
+
+  return {
+    overall,
+    winRate: winRateScore,
+    profitFactor: profitFactorScore,
+    avgWinLoss: avgWinLossScore,
+    consistency,
+    maxDrawdownScore,
+    recoveryFactor: recoveryFactorScore
+  };
+}
+
+function renderDashboardTab(): void {
+  const summary = stats();
+  const factor = profitFactor(state.trades);
+  const ratio = avgWinLoss(state.trades).ratio;
+  const dayStreak = currentDayStreak(state.trades);
+  const tradeStreak = currentTradeStreak(state.trades);
+
+  qs("#dashBalance").textContent = currency(state.accountBalance);
+  qs("#dashWinRate").textContent = percent(summary.winRate);
+  qs("#dashProfitFactor").textContent = formatRatio(factor);
+  qs("#dashAvgWinLoss").textContent = formatRatio(ratio);
+
+  const dayStreakEl = qs<HTMLElement>("#dashDayStreak");
+  dayStreakEl.textContent = streakLabel(dayStreak, "days");
+  dayStreakEl.classList.toggle("positive", dayStreak.type === "win");
+  dayStreakEl.classList.toggle("negative", dayStreak.type === "loss");
+
+  const tradeStreakEl = qs<HTMLElement>("#dashTradeStreak");
+  tradeStreakEl.textContent = streakLabel(tradeStreak, "trades");
+  tradeStreakEl.classList.toggle("positive", tradeStreak.type === "win");
+  tradeStreakEl.classList.toggle("negative", tradeStreak.type === "loss");
+
+  renderDashboardScoreChart();
+  renderDashboardPnlChart();
+}
+
+function renderDashboardScoreChart(): void {
+  const score = forexLabScore();
+  qs("#dashboardScoreValue").textContent = score.overall.toFixed(2);
+
+  const canvas = qs<HTMLCanvasElement>("#dashboardScoreRadar");
+  const styles = getComputedStyle(document.documentElement);
+  const accent = styles.getPropertyValue("--color-accent").trim() || "#22e08f";
+  const muted = styles.getPropertyValue("--color-text-muted").trim() || "#8b978f";
+
+  if (dashboardScoreChartInstance) dashboardScoreChartInstance.destroy();
+
+  dashboardScoreChartInstance = new Chart(canvas, {
+    type: "radar",
+    data: {
+      labels: ["Win %", "Profit factor", "Avg win/loss", "Consistency", "Max drawdown", "Recovery factor"],
+      datasets: [
+        {
+          label: "Forex Lab Score",
+          data: [
+            score.winRate,
+            score.profitFactor,
+            score.avgWinLoss,
+            score.consistency,
+            score.maxDrawdownScore,
+            score.recoveryFactor
+          ],
+          backgroundColor: `${accent}33`,
+          borderColor: accent,
+          pointBackgroundColor: accent
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        r: {
+          min: 0,
+          max: 100,
+          ticks: { display: false },
+          pointLabels: { color: muted },
+          grid: { color: "rgba(255,255,255,0.08)" },
+          angleLines: { color: "rgba(255,255,255,0.08)" }
+        }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+function renderDashboardPnlChart(): void {
+  const series = cumulativePnlSeries();
+  const canvas = qs<HTMLCanvasElement>("#dashboardPnlChart");
+  const styles = getComputedStyle(document.documentElement);
+  const accent = styles.getPropertyValue("--color-accent").trim() || "#22e08f";
+  const muted = styles.getPropertyValue("--color-text-muted").trim() || "#8b978f";
+
+  if (dashboardPnlChartInstance) dashboardPnlChartInstance.destroy();
+
+  dashboardPnlChartInstance = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: series.map((point) => dayLabel(point.date)),
+      datasets: [
+        {
+          label: "Cumulative P&L",
+          data: series.map((point) => point.cumulative),
+          borderColor: accent,
+          backgroundColor: `${accent}22`,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { ticks: { color: muted }, grid: { display: false } },
+        y: { ticks: { color: muted }, grid: { color: "rgba(255,255,255,0.06)" } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
 function renderMonthlyPnl(): void {
   const picker = qs<HTMLInputElement>("#monthPicker");
   picker.value = state.selectedMonth;
@@ -1534,9 +1732,12 @@ type CommandItem = {
 
 let commandBarFiltered: CommandItem[] = [];
 let commandBarActiveIndex = 0;
+let dashboardScoreChartInstance: any = null;
+let dashboardPnlChartInstance: any = null;
 
 function commandItems(): CommandItem[] {
   return [
+    { id: "dashboard", label: "Dashboard", hint: "Dashboard", keywords: "dashboard overview score summary", run: () => setTab("dashboard") },
     { id: "new-trade", label: "New trade", hint: "Log Trade", keywords: "new trade log add create", run: () => { setTab("log"); qs<HTMLSelectElement>("#pair").focus(); } },
     { id: "history", label: "Trade history", hint: "History", keywords: "history trades review", run: () => setTab("history") },
     { id: "monthly", label: "Monthly P&L", hint: "Monthly", keywords: "monthly pnl target goal", run: () => setTab("monthly") },
@@ -1986,7 +2187,7 @@ function bindEvents(): void {
   qsa<HTMLButtonElement>("[data-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       const tab = button.dataset.tab;
-      if (tab === "log" || tab === "history" || tab === "monthly" || tab === "analytics" || tab === "casestudy") setTab(tab);
+      if (tab === "dashboard" || tab === "log" || tab === "history" || tab === "monthly" || tab === "analytics" || tab === "casestudy") setTab(tab);
       const nav = document.querySelector<HTMLElement>("#sideNav");
       if (nav?.classList.contains("is-open")) toggleSidebarNav();
       toggleHamburgerMenu(true);

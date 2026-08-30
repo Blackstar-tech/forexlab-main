@@ -123,6 +123,10 @@
         <span class="sidebar-nav-toggle-icon" aria-hidden="true"></span>
       </button>
       <nav id="sideNav" class="side-nav" aria-label="Journal navigation">
+        <button type="button" data-tab="dashboard" title="Dashboard">
+          <span class="nav-icon" aria-hidden="true">📊</span>
+          <span class="nav-label">Dashboard</span>
+        </button>
         <button type="button" data-tab="log" class="is-active" title="Log trade">
           <span class="nav-icon" aria-hidden="true">📝</span>
           <span class="nav-label">Log trade</span>
@@ -164,6 +168,16 @@
             <button type="button" id="editNameCancel" class="ghost compact">Cancel</button>
           </form>
         </div>
+        <div class="topbar-balance" style="display:flex; align-items:center; gap:8px;">
+          <span class="topbar-balance-label" style="font-size:12px; text-transform:uppercase; letter-spacing:0.04em; opacity:0.65;">Account balance</span>
+          <strong id="metricBalance" style="font-size:1.1em;">$0.00</strong>
+          <button type="button" id="editBalanceButton" class="edit-name-btn" aria-label="Edit account balance">✏️</button>
+          <form id="editBalanceForm" class="edit-name-form" hidden>
+            <input id="editBalanceInput" type="number" min="0" step="0.01" inputmode="decimal" placeholder="10000" required>
+            <button type="submit" class="primary compact">Save</button>
+            <button type="button" id="editBalanceCancel" class="ghost compact">Cancel</button>
+          </form>
+        </div>
         <div class="topbar-actions">
           <button type="button" id="mobileThemeToggle" class="ghost mobile-only-btn" aria-label="Toggle theme">🌗</button>
           <button type="button" id="mobileLogoutButton" class="ghost mobile-only-btn" aria-label="Log out">⏻</button>
@@ -172,6 +186,7 @@
               <span class="hamburger-icon"><span></span><span></span><span></span></span>
             </button>
             <div id="hamburgerMenuPanel" class="hamburger-menu-panel" hidden role="menu" aria-label="Journal navigation">
+              <button type="button" data-tab="dashboard" role="menuitem">📊 Dashboard</button>
               <button type="button" data-tab="log" role="menuitem">📝 Log trade</button>
               <button type="button" data-tab="history" role="menuitem">📜 History</button>
               <button type="button" data-tab="monthly" role="menuitem">📅 Monthly P&amp;L</button>
@@ -225,6 +240,71 @@
             </div>
           </div>
         </article>
+      </section>
+
+      <section id="tab-dashboard" class="tab-panel">
+        <div class="panel-toolbar">
+          <div class="panel-title">
+            <h2>Dashboard</h2>
+            <p>Your trading performance at a glance.</p>
+          </div>
+        </div>
+
+        <section class="dashboard-grid" aria-label="Dashboard summary">
+          <article class="panel stat-panel">
+            <span>Account balance</span>
+            <strong id="dashBalance">$0.00</strong>
+          </article>
+          <article class="panel stat-panel">
+            <span>Trade win %</span>
+            <strong id="dashWinRate">0%</strong>
+          </article>
+          <article class="panel stat-panel">
+            <span>Profit factor</span>
+            <strong id="dashProfitFactor">-</strong>
+          </article>
+          <article class="panel stat-panel">
+            <span>Avg win / loss</span>
+            <strong id="dashAvgWinLoss">-</strong>
+          </article>
+        </section>
+
+        <section class="dashboard-grid dashboard-grid-2" aria-label="Dashboard streaks">
+          <article class="panel stat-panel">
+            <span>Current day streak</span>
+            <strong id="dashDayStreak">No streak</strong>
+          </article>
+          <article class="panel stat-panel">
+            <span>Current trade streak</span>
+            <strong id="dashTradeStreak">No streak</strong>
+          </article>
+        </section>
+
+        <section class="dashboard-charts">
+          <article class="panel dashboard-score-panel">
+            <div class="panel-title">
+              <h2>Forex Lab Score</h2>
+              <p>A composite score across six performance dimensions.</p>
+            </div>
+            <div class="dashboard-score-body">
+              <canvas id="dashboardScoreRadar"></canvas>
+              <div class="dashboard-score-readout">
+                <strong id="dashboardScoreValue">0</strong>
+                <span>out of 100</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel dashboard-pnl-panel">
+            <div class="panel-title">
+              <h2>Daily net cumulative P&amp;L</h2>
+              <p>Running total of P&amp;L by day.</p>
+            </div>
+            <div class="dashboard-pnl-body">
+              <canvas id="dashboardPnlChart"></canvas>
+            </div>
+          </article>
+        </section>
       </section>
 
       <section id="tab-log" class="tab-panel is-active">
@@ -733,6 +813,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="/client.js"></script>
 </body>
 </html>
