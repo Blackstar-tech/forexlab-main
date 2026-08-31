@@ -1022,30 +1022,46 @@
       }
       function renderDashboardScoreChart() {
         const score = forexLabScore();
-        qs("#dashboardScoreValue").textContent = score.overall.toFixed(2);
+        const overall = Number.isFinite(score.overall) ? score.overall : 0;
+        const scoreValEl = document.querySelector("#dashboardScoreValue");
+        if (scoreValEl) {
+          scoreValEl.textContent = overall.toFixed(2);
+        }
+        const markerEl = document.querySelector("#scoreGaugeMarker");
+        if (markerEl) {
+          const clamped = Math.max(0, Math.min(100, overall));
+          markerEl.style.left = `${clamped}%`;
+        }
         const canvas = qs("#dashboardScoreRadar");
-        const styles = getComputedStyle(document.documentElement);
-        const accent = styles.getPropertyValue("--color-accent").trim() || "#22e08f";
-        const muted = styles.getPropertyValue("--color-text-muted").trim() || "#8b978f";
+        if (!canvas) return;
         if (dashboardScoreChartInstance) dashboardScoreChartInstance.destroy();
+        const labels = ["Win %", "Profit factor", "Avg win/loss", "Recovery factor", "Max drawdown", "Consistency"];
+        const data = [
+          score.winRate,
+          score.profitFactor,
+          score.avgWinLoss,
+          score.recoveryFactor,
+          score.maxDrawdownScore,
+          score.consistency
+        ];
         dashboardScoreChartInstance = new Chart(canvas, {
           type: "radar",
           data: {
-            labels: ["Win %", "Profit factor", "Avg win/loss", "Consistency", "Max drawdown", "Recovery factor"],
+            labels,
             datasets: [
               {
-                label: "Forex Lab Score",
-                data: [
-                  score.winRate,
-                  score.profitFactor,
-                  score.avgWinLoss,
-                  score.consistency,
-                  score.maxDrawdownScore,
-                  score.recoveryFactor
-                ],
-                backgroundColor: `${accent}33`,
-                borderColor: accent,
-                pointBackgroundColor: accent
+                label: "Score",
+                data,
+                backgroundColor: "rgba(139, 92, 246, 0.42)",
+                borderColor: "#8b5cf6",
+                borderWidth: 2,
+                pointBackgroundColor: "#8b5cf6",
+                pointBorderColor: "#ffffff",
+                pointBorderWidth: 1.5,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointHoverBackgroundColor: "#a78bfa",
+                pointHoverBorderColor: "#ffffff"
               }
             ]
           },
@@ -1056,13 +1072,45 @@
               r: {
                 min: 0,
                 max: 100,
-                ticks: { display: false },
-                pointLabels: { color: muted },
-                grid: { color: "rgba(255,255,255,0.08)" },
-                angleLines: { color: "rgba(255,255,255,0.08)" }
+                ticks: {
+                  display: false,
+                  stepSize: 20
+                },
+                pointLabels: {
+                  color: "rgba(226, 232, 240, 0.8)",
+                  font: {
+                    size: 11.5,
+                    family: "'Inter', sans-serif",
+                    weight: 500
+                  },
+                  padding: 8
+                },
+                grid: {
+                  color: "rgba(255, 255, 255, 0.1)",
+                  circular: false,
+                  lineWidth: 1
+                },
+                angleLines: {
+                  color: "rgba(255, 255, 255, 0.12)",
+                  lineWidth: 1
+                }
               }
             },
-            plugins: { legend: { display: false } }
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: "rgba(15, 23, 42, 0.95)",
+                borderColor: "rgba(139, 92, 246, 0.4)",
+                borderWidth: 1,
+                titleFont: { family: "'Inter', sans-serif", size: 12, weight: 600 },
+                bodyFont: { family: "'JetBrains Mono', monospace", size: 12 },
+                padding: 8,
+                displayColors: false,
+                callbacks: {
+                  label: (ctx) => ` ${ctx.label}: ${Number(ctx.raw).toFixed(1)} / 100`
+                }
+              }
+            }
           }
         });
       }

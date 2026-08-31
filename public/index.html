@@ -282,15 +282,41 @@
 
         <section class="dashboard-charts">
           <article class="panel dashboard-score-panel">
-            <div class="panel-title">
-              <h2>Forex Lab Score</h2>
-              <p>A composite score across six performance dimensions.</p>
+            <div class="panel-title dashboard-score-header">
+              <div class="dashboard-score-title-row">
+                <h2>Forex Lab Score</h2>
+                <span class="info-tooltip" title="A weighted composite score across six performance dimensions: Win %, Profit factor, Avg win/loss, Recovery factor, Max drawdown, and Consistency.">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                  </svg>
+                </span>
+              </div>
             </div>
             <div class="dashboard-score-body">
               <canvas id="dashboardScoreRadar"></canvas>
-              <div class="dashboard-score-readout">
-                <strong id="dashboardScoreValue">0</strong>
-                <span>out of 100</span>
+            </div>
+            <div class="dashboard-score-footer">
+              <div class="score-footer-left">
+                <span class="score-footer-label">Your Forex Lab Score</span>
+                <strong id="dashboardScoreValue" class="score-footer-value">0.00</strong>
+              </div>
+              <div class="score-footer-right">
+                <div class="score-gauge-bar-wrapper">
+                  <div class="score-gauge-bar">
+                    <div class="score-gauge-track"></div>
+                    <div id="scoreGaugeMarker" class="score-gauge-marker"></div>
+                  </div>
+                  <div class="score-gauge-ticks">
+                    <span>0</span>
+                    <span>20</span>
+                    <span>40</span>
+                    <span>60</span>
+                    <span>80</span>
+                    <span>100</span>
+                  </div>
+                </div>
               </div>
             </div>
           </article>
