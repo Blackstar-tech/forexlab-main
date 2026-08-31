@@ -3,6 +3,8 @@ export type TradeDirection = "buy" | "sell";
 export type TargetMode = "currency" | "percent";
 export type TabKey = "dashboard" | "log" | "history" | "monthly" | "analytics" | "casestudy";
 
+export type ShotTab = "before" | "after" | "analysis";
+
 export interface TradeScreenshots {
   before: string | null;
   after: string | null;
