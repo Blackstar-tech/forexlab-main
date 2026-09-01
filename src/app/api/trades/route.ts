@@ -73,7 +73,7 @@ export async function GET() {
     rating: t.rating || 3,
     preTradeNotes: t.pre_trade_notes || "",
     notes: t.notes || "",
-    screenshots: { before: null, after: null, analysis: null },
+    screenshots: t.screenshots || { before: null, after: null, analysis: null },
     createdAt: t.created_at
   }));
 
@@ -141,12 +141,19 @@ export async function POST(req: NextRequest) {
     entry_price: tradeData.entryPrice,
     stop_loss: tradeData.stopLoss,
     take_profit: tradeData.takeProfit,
+    lot_size: tradeData.lotSize,
     risk_percent: tradeData.riskPercent,
     planned_rr: tradeData.plannedRr,
+    rr_achieved: tradeData.rrAchieved,
+    pips: tradeData.pips,
     pnl: tradeData.pnl,
     mood: tradeData.emotion,
+    sleep_quality: tradeData.sleepQuality,
+    confidence: tradeData.confidence,
     rating: tradeData.rating,
+    pre_trade_notes: tradeData.preTradeNotes,
     notes: tradeData.notes,
+    screenshots: tradeData.screenshots,
     created_at: tradeData.createdAt
   };
 

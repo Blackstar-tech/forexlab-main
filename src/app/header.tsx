@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { User, Trade } from "@/utils/types";
 import { currency, percent } from "@/utils/formatters";
 
@@ -21,6 +21,27 @@ export default function Header({
 }: Props) {
   const [editingBalance, setEditingBalance] = useState(false);
   const [tempBalance, setTempBalance] = useState(accountBalance.toString());
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("forexlab.theme");
+    let initialTheme: "dark" | "light" = "dark";
+    if (stored === "light" || stored === "dark") {
+      initialTheme = stored;
+    } else if (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
+      initialTheme = "light";
+    }
+    setTheme(initialTheme);
+    document.documentElement.setAttribute("data-theme", initialTheme);
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    localStorage.setItem("forexlab.theme", nextTheme);
+    document.documentElement.setAttribute("data-theme", nextTheme);
+    window.dispatchEvent(new CustomEvent("themechange", { detail: { theme: nextTheme } }));
+  };
 
   const total = trades.length;
   const wins = trades.filter((t) => t.result === "win").length;
@@ -73,6 +94,16 @@ export default function Header({
               </strong>
             )}
           </div>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label="Toggle theme"
+            style={{ margin: 0 }}
+          >
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
           <button type="button" className="ghost compact" onClick={onLogout}>
             Sign Out
           </button>

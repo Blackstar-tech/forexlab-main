@@ -98,9 +98,9 @@ export default function AnalyticsView({ trades }: Props) {
                     justifyContent: "space-between",
                     alignItems: "center",
                     padding: "10px 12px",
-                    background: "rgba(255,255,255,0.02)",
+                    background: "rgba(var(--color-white-rgb) / 0.02)",
                     borderRadius: "6px",
-                    border: "1px solid rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(var(--color-white-rgb) / 0.04)",
                     overflow: "hidden"
                   }}
                 >

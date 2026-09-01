@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Chart as ChartJS,
   RadarController,
@@ -22,6 +22,23 @@ interface Props {
 export default function ForexLabScoreCard({ score }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const chartRef = useRef<ChartJS | null>(null);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    const updateTheme = () => {
+      const isLight = document.documentElement.getAttribute("data-theme") === "light";
+      setTheme(isLight ? "light" : "dark");
+    };
+    updateTheme();
+    window.addEventListener("themechange", updateTheme);
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+    return () => {
+      window.removeEventListener("themechange", updateTheme);
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -29,6 +46,13 @@ export default function ForexLabScoreCard({ score }: Props) {
     if (chartRef.current) {
       chartRef.current.destroy();
     }
+
+    const isLight = theme === "light";
+    const gridColor = isLight ? "rgba(15, 23, 42, 0.1)" : "rgba(255, 255, 255, 0.1)";
+    const angleLineColor = isLight ? "rgba(15, 23, 42, 0.12)" : "rgba(255, 255, 255, 0.12)";
+    const pointLabelColor = isLight ? "rgba(15, 23, 42, 0.85)" : "rgba(226, 232, 240, 0.8)";
+    const tooltipBg = isLight ? "rgba(255, 255, 255, 0.96)" : "rgba(15, 23, 42, 0.95)";
+    const tooltipTextColor = isLight ? "#0f172a" : "#f4f7f5";
 
     const labels = ["Win %", "Profit factor", "Avg win/loss", "Recovery factor", "Max drawdown", "Consistency"];
     const data = [
@@ -52,12 +76,12 @@ export default function ForexLabScoreCard({ score }: Props) {
             borderColor: "#8b5cf6",
             borderWidth: 2,
             pointBackgroundColor: "#8b5cf6",
-            pointBorderColor: "#ffffff",
+            pointBorderColor: isLight ? "#0f172a" : "#ffffff",
             pointBorderWidth: 1.5,
             pointRadius: 4,
             pointHoverRadius: 6,
             pointHoverBackgroundColor: "#a78bfa",
-            pointHoverBorderColor: "#ffffff"
+            pointHoverBorderColor: isLight ? "#0f172a" : "#ffffff"
           }
         ]
       },
@@ -73,7 +97,7 @@ export default function ForexLabScoreCard({ score }: Props) {
               stepSize: 20
             },
             pointLabels: {
-              color: "rgba(226, 232, 240, 0.8)",
+              color: pointLabelColor,
               font: {
                 size: 11.5,
                 family: "'Inter', sans-serif",
@@ -82,12 +106,12 @@ export default function ForexLabScoreCard({ score }: Props) {
               padding: 8
             },
             grid: {
-              color: "rgba(255, 255, 255, 0.1)",
+              color: gridColor,
               circular: false,
               lineWidth: 1
             },
             angleLines: {
-              color: "rgba(255, 255, 255, 0.12)",
+              color: angleLineColor,
               lineWidth: 1
             }
           }
@@ -95,9 +119,11 @@ export default function ForexLabScoreCard({ score }: Props) {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            backgroundColor: tooltipBg,
             borderColor: "rgba(139, 92, 246, 0.4)",
             borderWidth: 1,
+            titleColor: tooltipTextColor,
+            bodyColor: tooltipTextColor,
             titleFont: { family: "'Inter', sans-serif", size: 12, weight: "bold" },
             bodyFont: { family: "'JetBrains Mono', monospace", size: 12 },
             padding: 8,
@@ -115,7 +141,7 @@ export default function ForexLabScoreCard({ score }: Props) {
         chartRef.current.destroy();
       }
     };
-  }, [score]);
+  }, [score, theme]);
 
   const clampedScore = Math.max(0, Math.min(100, score.overall));
 

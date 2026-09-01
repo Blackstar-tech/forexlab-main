@@ -81,7 +81,7 @@ export default function MonthlyView({ trades, accountBalance }: Props) {
         </div>
         <div className="calendar-grid" style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "8px" }}>
           {Array.from({ length: firstDayOfWeek }).map((_, i) => (
-            <div key={`empty-${i}`} className="calendar-day is-empty" style={{ minHeight: "80px", border: "1px dashed rgba(255,255,255,0.04)", borderRadius: "6px" }} />
+            <div key={`empty-${i}`} className="calendar-day is-empty" style={{ minHeight: "80px", border: "1px dashed rgba(var(--color-white-rgb) / 0.08)", borderRadius: "6px" }} />
           ))}
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const dayNum = i + 1;
@@ -90,8 +90,8 @@ export default function MonthlyView({ trades, accountBalance }: Props) {
             const pnl = dayData?.pnl || 0;
             const count = dayData?.count || 0;
 
-            const bg = count > 0 ? (pnl > 0 ? "rgba(34, 224, 143, 0.12)" : pnl < 0 ? "rgba(255, 84, 104, 0.12)" : "rgba(255, 255, 255, 0.05)") : "rgba(255, 255, 255, 0.02)";
-            const border = count > 0 ? (pnl > 0 ? "rgba(34, 224, 143, 0.3)" : pnl < 0 ? "rgba(255, 84, 104, 0.3)" : "rgba(255, 255, 255, 0.1)") : "rgba(255, 255, 255, 0.04)";
+            const bg = count > 0 ? (pnl > 0 ? "rgba(34, 224, 143, 0.12)" : pnl < 0 ? "rgba(255, 84, 104, 0.12)" : "rgba(var(--color-white-rgb) / 0.05)") : "rgba(var(--color-white-rgb) / 0.02)";
+            const border = count > 0 ? (pnl > 0 ? "rgba(34, 224, 143, 0.3)" : pnl < 0 ? "rgba(255, 84, 104, 0.3)" : "rgba(var(--color-white-rgb) / 0.1)") : "rgba(var(--color-white-rgb) / 0.06)";
 
             return (
               <div

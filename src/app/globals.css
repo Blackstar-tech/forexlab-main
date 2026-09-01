@@ -309,6 +309,7 @@ table td,
 
 .auth-toggle button,
 .side-nav button,
+.side-nav a,
 .segmented button,
 .rating-buttons button {
   border: 0;
@@ -318,6 +319,7 @@ table td,
   font-weight: 700;
   font-size: var(--font-size-sm);
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+  text-decoration: none;
 }
 
 .auth-toggle button {
@@ -623,7 +625,8 @@ textarea:focus {
   gap: 8px;
 }
 
-.side-nav button {
+.side-nav button,
+.side-nav a {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -633,6 +636,16 @@ textarea:focus {
   border-radius: var(--radius-md);
   text-align: left;
   font-family: var(--font-body);
+  text-decoration: none;
+  color: var(--muted);
+  box-sizing: border-box;
+}
+
+.side-nav button:hover,
+.side-nav a:hover {
+  background: rgb(var(--color-accent-rgb) / 0.08);
+  color: var(--accent);
+  border-color: rgb(var(--color-accent-rgb) / 0.35);
 }
 .nav-icon {
   flex: 0 0 auto;
@@ -1398,8 +1411,10 @@ td {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .side-nav button {
+  .side-nav button,
+  .side-nav a {
     text-align: center;
+    justify-content: center;
   }
 
   .sidebar-logout {
@@ -2137,7 +2152,7 @@ th[data-sort].is-sorted .sort-indicator {
 }
 /* ---------- Collapsible sidebar nav ---------- */
 .sidebar-nav-toggle {
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -2149,6 +2164,12 @@ th[data-sort].is-sorted .sort-indicator {
   color: var(--text);
   font-weight: 700;
   font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+.sidebar-nav-toggle:hover {
+  border-color: rgb(var(--color-accent-rgb) / 0.5);
+  background: rgb(var(--color-white-rgb) / 0.06);
 }
 .sidebar-nav-toggle-icon {
   width: 8px;
@@ -2364,7 +2385,7 @@ th[data-sort].is-sorted .sort-indicator {
 /* ---------- Light theme overrides ---------- */
 [data-theme="light"] {
   --color-bg-base: #f2f4f8;
-  --color-surface: rgb(255 255 255 / 0.86);
+  --color-surface: rgb(255 255 255 / 0.88);
   --color-border: rgb(15 23 42 / 0.1);
   --color-text-primary: #0f172a;
   --color-text-muted: #55606b;
@@ -2372,6 +2393,48 @@ th[data-sort].is-sorted .sort-indicator {
   --color-bg-rgb: 242 244 248;
   --color-white-rgb: 15 23 42;
   --shadow: 0 20px 50px rgb(15 23 42 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.6);
+
+  --bg: var(--color-bg-base);
+  --panel: var(--color-surface);
+  --panel-soft: rgb(var(--color-surface-rgb) / 0.95);
+  --text: var(--color-text-primary);
+  --muted: var(--color-text-muted);
+  --line: var(--color-border);
+}
+
+[data-theme="dark"] {
+  --color-profit: #22e08f;
+  --color-loss: #ff5468;
+  --color-accent: #22e08f;
+  --color-bg-base: #070b09;
+  --color-surface: rgb(17 23 20 / 0.72);
+  --color-border: rgb(255 255 255 / 0.07);
+  --color-text-primary: #f4f7f5;
+  --color-text-muted: #8b978f;
+
+  --color-profit-rgb: 34 224 143;
+  --color-loss-rgb: 255 84 104;
+  --color-accent-rgb: 34 224 143;
+  --color-warning-rgb: 246 200 95;
+  --color-surface-rgb: 17 23 20;
+  --color-bg-rgb: 7 11 9;
+  --color-white-rgb: 255 255 255;
+  --color-ink: #04160e;
+  --color-warning: #f6c85f;
+  --color-cyan-soft: #7cf5c4;
+
+  --bg: var(--color-bg-base);
+  --panel: var(--color-surface);
+  --panel-soft: rgb(var(--color-surface-rgb) / 0.86);
+  --text: var(--color-text-primary);
+  --muted: var(--color-text-muted);
+  --line: var(--color-border);
+  --accent: var(--color-accent);
+  --accent-strong: var(--color-cyan-soft);
+  --danger: var(--color-loss);
+  --warning: var(--color-warning);
+  --blue: var(--color-cyan-soft);
+  --shadow: 0 24px 80px rgb(0 0 0 / 0.42), inset 0 1px 0 rgb(var(--color-white-rgb) / 0.06);
 }
 [data-theme="light"] body {
   background-image:
@@ -2649,6 +2712,7 @@ body {
     gap: 8px;
   }
   .app-view.sidebar-collapsed .side-nav button,
+  .app-view.sidebar-collapsed .side-nav a,
   .app-view.sidebar-collapsed .sidebar-logout {
     width: 44px;
     height: 44px;
@@ -3091,6 +3155,7 @@ textarea,
 }
 
 .side-nav button,
+.side-nav a,
 .select-option,
 .hamburger-menu-panel button {
   border-radius: 999px;

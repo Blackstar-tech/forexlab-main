@@ -177,7 +177,7 @@ export default function TradeHistory({ trades, onDeleteTrade, onShowToast }: Pro
                   </tr>
                   {expandedId === t.id && (
                     <tr>
-                      <td colSpan={9} style={{ background: "rgba(255,255,255,0.02)", padding: "16px" }}>
+                      <td colSpan={9} style={{ background: "rgba(var(--color-white-rgb) / 0.02)", padding: "16px" }}>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "10px" }}>
                           <div><span className="muted-label">Entry:</span> <strong>{t.entryPrice || "-"}</strong></div>
                           <div><span className="muted-label">SL:</span> <strong>{t.stopLoss || "-"}</strong></div>

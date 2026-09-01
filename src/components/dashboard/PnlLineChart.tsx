@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Chart as ChartJS,
   LineController,
@@ -26,6 +26,23 @@ interface Props {
 export default function PnlLineChart({ trades }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const chartRef = useRef<ChartJS | null>(null);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    const updateTheme = () => {
+      const isLight = document.documentElement.getAttribute("data-theme") === "light";
+      setTheme(isLight ? "light" : "dark");
+    };
+    updateTheme();
+    window.addEventListener("themechange", updateTheme);
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+    return () => {
+      window.removeEventListener("themechange", updateTheme);
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -33,6 +50,12 @@ export default function PnlLineChart({ trades }: Props) {
     if (chartRef.current) {
       chartRef.current.destroy();
     }
+
+    const isLight = theme === "light";
+    const gridColor = isLight ? "rgba(15, 23, 42, 0.08)" : "rgba(255, 255, 255, 0.05)";
+    const tickColor = isLight ? "#55606b" : "#8b978f";
+    const tooltipBg = isLight ? "rgba(255, 255, 255, 0.96)" : "rgba(17, 23, 20, 0.95)";
+    const tooltipTextColor = isLight ? "#0f172a" : "#f4f7f5";
 
     const series = cumulativePnlSeries(trades);
     const labels = series.map((s) => s.date.slice(5));
@@ -47,12 +70,12 @@ export default function PnlLineChart({ trades }: Props) {
             label: "Cumulative P&L",
             data,
             borderColor: "#22e08f",
-            backgroundColor: "rgba(34, 224, 143, 0.12)",
+            backgroundColor: isLight ? "rgba(34, 224, 143, 0.18)" : "rgba(34, 224, 143, 0.12)",
             borderWidth: 2.5,
             fill: true,
             tension: 0.25,
             pointBackgroundColor: "#22e08f",
-            pointBorderColor: "#ffffff",
+            pointBorderColor: isLight ? "#0f172a" : "#ffffff",
             pointBorderWidth: 1.5,
             pointRadius: 4,
             pointHoverRadius: 6
@@ -64,13 +87,13 @@ export default function PnlLineChart({ trades }: Props) {
         maintainAspectRatio: false,
         scales: {
           x: {
-            grid: { color: "rgba(255, 255, 255, 0.05)" },
-            ticks: { color: "#8b978f", font: { family: "'JetBrains Mono', monospace", size: 11 } }
+            grid: { color: gridColor },
+            ticks: { color: tickColor, font: { family: "'JetBrains Mono', monospace", size: 11 } }
           },
           y: {
-            grid: { color: "rgba(255, 255, 255, 0.05)" },
+            grid: { color: gridColor },
             ticks: {
-              color: "#8b978f",
+              color: tickColor,
               font: { family: "'JetBrains Mono', monospace", size: 11 },
               callback: (val) => currency(Number(val))
             }
@@ -79,9 +102,11 @@ export default function PnlLineChart({ trades }: Props) {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: "rgba(17, 23, 20, 0.95)",
+            backgroundColor: tooltipBg,
             borderColor: "rgba(34, 224, 143, 0.4)",
             borderWidth: 1,
+            titleColor: tooltipTextColor,
+            bodyColor: tooltipTextColor,
             titleFont: { family: "'JetBrains Mono', monospace", size: 12 },
             bodyFont: { family: "'JetBrains Mono', monospace", size: 12 },
             callbacks: {
@@ -97,7 +122,7 @@ export default function PnlLineChart({ trades }: Props) {
         chartRef.current.destroy();
       }
     };
-  }, [trades]);
+  }, [trades, theme]);
 
   return (
     <article className="panel dashboard-pnl-panel">

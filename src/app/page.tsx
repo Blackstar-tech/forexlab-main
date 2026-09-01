@@ -11,6 +11,7 @@ import TradeHistory from "@/components/history/TradeHistory";
 import MonthlyView from "@/components/monthly/MonthlyView";
 import AnalyticsView from "@/components/analytics/AnalyticsView";
 import CaseStudyView from "@/components/casestudy/CaseStudyView";
+import TradingViewTab from "@/components/tradingview/TradingViewTab";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -20,6 +21,14 @@ export default function Home() {
   const [caseStudies, setCaseStudies] = useState<CaseStudy[]>([]);
   const [accountBalance, setAccountBalance] = useState<number>(50000);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("forexlab.sidebarCollapsed");
+    if (saved === "true") {
+      setSidebarCollapsed(true);
+    }
+  }, []);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -131,7 +140,7 @@ export default function Home() {
   }
 
   return (
-    <div className="app-view">
+    <div className={`app-view ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
         <div className="sidebar-head">
           <div className="brand-mark small">FX</div>
@@ -141,11 +150,27 @@ export default function Home() {
           </div>
         </div>
 
+        <button
+          type="button"
+          className="sidebar-nav-toggle"
+          onClick={() => {
+            const next = !sidebarCollapsed;
+            setSidebarCollapsed(next);
+            localStorage.setItem("forexlab.sidebarCollapsed", next ? "true" : "false");
+          }}
+          aria-expanded={!sidebarCollapsed}
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <span>Navigation</span>
+          <span className="sidebar-nav-toggle-icon" />
+        </button>
+
         <nav className="side-nav">
           <button
             type="button"
             className={activeTab === "dashboard" ? "is-active" : ""}
             onClick={() => setActiveTab("dashboard")}
+            title="Dashboard"
           >
             <span className="nav-icon">📊</span>
             <span className="nav-label">Dashboard</span>
@@ -154,6 +179,7 @@ export default function Home() {
             type="button"
             className={activeTab === "log" ? "is-active" : ""}
             onClick={() => setActiveTab("log")}
+            title="Log Trade"
           >
             <span className="nav-icon">📋</span>
             <span className="nav-label">Log Trade</span>
@@ -162,6 +188,7 @@ export default function Home() {
             type="button"
             className={activeTab === "history" ? "is-active" : ""}
             onClick={() => setActiveTab("history")}
+            title="History"
           >
             <span className="nav-icon">📜</span>
             <span className="nav-label">History</span>
@@ -170,6 +197,7 @@ export default function Home() {
             type="button"
             className={activeTab === "monthly" ? "is-active" : ""}
             onClick={() => setActiveTab("monthly")}
+            title="Monthly P&L"
           >
             <span className="nav-icon">📅</span>
             <span className="nav-label">Monthly P&amp;L</span>
@@ -178,6 +206,7 @@ export default function Home() {
             type="button"
             className={activeTab === "analytics" ? "is-active" : ""}
             onClick={() => setActiveTab("analytics")}
+            title="Analytics"
           >
             <span className="nav-icon">📈</span>
             <span className="nav-label">Analytics</span>
@@ -186,15 +215,26 @@ export default function Home() {
             type="button"
             className={activeTab === "casestudy" ? "is-active" : ""}
             onClick={() => setActiveTab("casestudy")}
+            title="Case Studies"
           >
             <span className="nav-icon">🔬</span>
             <span className="nav-label">Case Studies</span>
           </button>
+          <button
+            type="button"
+            className={activeTab === "tradingview" ? "is-active" : ""}
+            onClick={() => setActiveTab("tradingview")}
+            title="TradingView"
+          >
+            <span className="nav-icon">🕯️</span>
+            <span className="nav-label">TradingView</span>
+          </button>
         </nav>
 
         <div className="sidebar-logout">
-          <button type="button" className="ghost danger" style={{ width: "100%" }} onClick={handleLogout}>
-            Sign Out
+          <button type="button" className="ghost danger" style={{ width: "100%" }} onClick={handleLogout} title="Sign Out">
+            <span className="nav-icon" style={{ display: "none" }}>🚪</span>
+            <span className="nav-label">Sign Out</span>
           </button>
         </div>
       </aside>
@@ -230,6 +270,9 @@ export default function Home() {
             onDeleteCaseStudy={handleDeleteCaseStudy}
             onShowToast={showToast}
           />
+        )}
+        {activeTab === "tradingview" && (
+          <TradingViewTab />
         )}
 
         <Footer />
