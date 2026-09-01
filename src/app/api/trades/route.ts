@@ -159,7 +159,8 @@ export async function POST(req: NextRequest) {
 
   const { error } = await getSupabase().from("trades").insert([supabasePayload]);
   if (error) {
-    return NextResponse.json({ error: "Failed to save trade." }, { status: 500 });
+    console.error("Supabase insert error:", error);
+    return NextResponse.json({ error: error.message || "Failed to save trade." }, { status: 500 });
   }
 
   return NextResponse.json({ trade: tradeData }, { status: 201 });
