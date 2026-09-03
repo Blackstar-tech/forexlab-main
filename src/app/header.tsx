@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { User, Trade } from "@/utils/types";
+import React, { useState, useEffect, useRef } from "react";
+import { User, Trade, TabKey } from "@/utils/types";
 import { currency, percent } from "@/utils/formatters";
 
 interface Props {
@@ -13,6 +13,9 @@ interface Props {
   onLogout: () => void;
   selectedMonth: string;
   isMonthlyView: boolean;
+  navItems: { key: TabKey; icon: string; label: string }[];
+  activeTab: TabKey;
+  onTabChange: (tab: TabKey) => void;
 }
 
 export default function Header({
@@ -23,11 +26,16 @@ export default function Header({
   onUpdateBalance,
   onLogout,
   selectedMonth,
-  isMonthlyView
+  isMonthlyView,
+  navItems,
+  activeTab,
+  onTabChange
 }: Props) {
   const [editingBalance, setEditingBalance] = useState(false);
   const [tempBalance, setTempBalance] = useState(startingBalance.toString());
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("forexlab.theme");
@@ -40,6 +48,16 @@ export default function Header({
     setTheme(initialTheme);
     document.documentElement.setAttribute("data-theme", initialTheme);
   }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    if (menuOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
 
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";
@@ -84,8 +102,43 @@ export default function Header({
   return (
     <header className="topbar-section" style={{ marginBottom: "20px" }}>
       <div className="topbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h1 style={{ fontSize: "24px", margin: 0 }}>
+        <div className="hamburger-wrap" ref={menuRef}>
+          <button
+            type="button"
+            className="hamburger-btn ghost"
+            aria-expanded={menuOpen}
+            aria-label="Open navigation menu"
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            <span className="hamburger-icon">
+              <span />
+              <span />
+              <span />
+            </span>
+          </button>
+          {menuOpen && (
+            <div className="hamburger-menu-panel">
+              {navItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={activeTab === item.key ? "is-active" : ""}
+                  onClick={() => { onTabChange(item.key); setMenuOpen(false); }}
+                >
+                  <span style={{ marginRight: "8px" }}>{item.icon}</span>
+                  {item.label}
+                </button>
+              ))}
+              <div style={{ borderTop: "1px solid var(--line)", margin: "6px 0" }} />
+              <button type="button" onClick={() => { setMenuOpen(false); onLogout(); }}>
+                🚪 Sign Out
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 style={{ fontSize: "24px", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             Welcome, <span>{user?.name || "Trader"}</span>
           </h1>
         </div>
@@ -116,7 +169,7 @@ export default function Header({
               )}
             </div>
             {!editingBalance && (
-              <small style={{ display: "block", fontSize: "10px", color: "var(--muted)" }}>
+              <small className="balance-starting-note" style={{ display: "block", fontSize: "10px", color: "var(--muted)" }}>
                 Starting: {currency(startingBalance)}
               </small>
             )}
@@ -131,7 +184,7 @@ export default function Header({
           >
             {theme === "dark" ? "☀️" : "🌙"}
           </button>
-          <button type="button" className="ghost compact" onClick={onLogout}>
+          <button type="button" className="ghost compact topbar-signout-desktop" onClick={onLogout}>
             Sign Out
           </button>
         </div>

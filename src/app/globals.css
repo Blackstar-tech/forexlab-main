@@ -2861,6 +2861,14 @@ body {
     display: block;
   }
 
+  .balance-starting-note {
+    display: none;
+  }
+
+  .topbar-signout-desktop {
+    display: none;
+  }
+
   .hamburger-menu-panel {
     position: fixed;
     top: 60px;

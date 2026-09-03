@@ -13,6 +13,16 @@ import AnalyticsView from "@/components/analytics/AnalyticsView";
 import CaseStudyView from "@/components/casestudy/CaseStudyView";
 import TradingViewTab from "@/components/tradingview/TradingViewTab";
 
+const NAV_ITEMS: { key: TabKey; icon: string; label: string }[] = [
+  { key: "dashboard", icon: "📊", label: "Dashboard" },
+  { key: "log", icon: "📋", label: "Log Trade" },
+  { key: "history", icon: "📜", label: "History" },
+  { key: "monthly", icon: "📅", label: "Monthly P&L" },
+  { key: "analytics", icon: "📈", label: "Analytics" },
+  { key: "casestudy", icon: "🔬", label: "Case Studies" },
+  { key: "tradingview", icon: "🕯️", label: "TradingView" }
+];
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -168,69 +178,18 @@ export default function Home() {
         </button>
 
         <nav className="side-nav">
-          <button
-            type="button"
-            className={activeTab === "dashboard" ? "is-active" : ""}
-            onClick={() => setActiveTab("dashboard")}
-            title="Dashboard"
-          >
-            <span className="nav-icon">📊</span>
-            <span className="nav-label">Dashboard</span>
-          </button>
-          <button
-            type="button"
-            className={activeTab === "log" ? "is-active" : ""}
-            onClick={() => setActiveTab("log")}
-            title="Log Trade"
-          >
-            <span className="nav-icon">📋</span>
-            <span className="nav-label">Log Trade</span>
-          </button>
-          <button
-            type="button"
-            className={activeTab === "history" ? "is-active" : ""}
-            onClick={() => setActiveTab("history")}
-            title="History"
-          >
-            <span className="nav-icon">📜</span>
-            <span className="nav-label">History</span>
-          </button>
-          <button
-            type="button"
-            className={activeTab === "monthly" ? "is-active" : ""}
-            onClick={() => setActiveTab("monthly")}
-            title="Monthly P&L"
-          >
-            <span className="nav-icon">📅</span>
-            <span className="nav-label">Monthly P&amp;L</span>
-          </button>
-          <button
-            type="button"
-            className={activeTab === "analytics" ? "is-active" : ""}
-            onClick={() => setActiveTab("analytics")}
-            title="Analytics"
-          >
-            <span className="nav-icon">📈</span>
-            <span className="nav-label">Analytics</span>
-          </button>
-          <button
-            type="button"
-            className={activeTab === "casestudy" ? "is-active" : ""}
-            onClick={() => setActiveTab("casestudy")}
-            title="Case Studies"
-          >
-            <span className="nav-icon">🔬</span>
-            <span className="nav-label">Case Studies</span>
-          </button>
-          <button
-            type="button"
-            className={activeTab === "tradingview" ? "is-active" : ""}
-            onClick={() => setActiveTab("tradingview")}
-            title="TradingView"
-          >
-            <span className="nav-icon">🕯️</span>
-            <span className="nav-label">TradingView</span>
-          </button>
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={activeTab === item.key ? "is-active" : ""}
+              onClick={() => setActiveTab(item.key)}
+              title={item.label}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-label">{item.label}</span>
+            </button>
+          ))}
         </nav>
 
         <div className="sidebar-logout">
@@ -251,6 +210,9 @@ export default function Home() {
           onLogout={handleLogout}
           selectedMonth={selectedMonth}
           isMonthlyView={activeTab === "monthly"}
+          navItems={NAV_ITEMS}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
         />
 
         {activeTab === "dashboard" && (
