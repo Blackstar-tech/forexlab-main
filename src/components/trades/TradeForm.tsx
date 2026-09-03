@@ -34,10 +34,10 @@ export default function TradeForm({ onSaveTrade, onShowToast }: Props) {
   const [notes, setNotes] = useState("");
 
   const [activeShot, setActiveShot] = useState<ShotTab>("before");
-  const [screenshots, setScreenshots] = useState<{ before: string | null; after: string | null; analysis: string | null }>({
-    before: null,
-    after: null,
-    analysis: null
+  const [screenshots, setScreenshots] = useState<{ before: string[]; after: string[]; analysis: string[] }>({
+    before: [],
+    after: [],
+    analysis: []
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -54,12 +54,19 @@ export default function TradeForm({ onSaveTrade, onShowToast }: Props) {
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
+    const uploadedUrls: string[] = [];
+
+    for (const file of Array.from(files)) {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
       try {
         const res = await fetch("/api/uploads", {
           method: "POST",
@@ -67,15 +74,29 @@ export default function TradeForm({ onSaveTrade, onShowToast }: Props) {
           body: JSON.stringify({ dataUrl })
         });
         const data = await res.json();
-        if (data.url) {
-          setScreenshots((prev) => ({ ...prev, [activeShot]: data.url }));
-          onShowToast("Screenshot uploaded!");
-        }
+        if (data.url) uploadedUrls.push(data.url);
       } catch {
-        onShowToast("Failed to upload screenshot.");
+        onShowToast(`Failed to upload one of the screenshots.`);
       }
-    };
-    reader.readAsDataURL(file);
+    }
+
+    if (uploadedUrls.length > 0) {
+      setScreenshots((prev) => ({
+        ...prev,
+        [activeShot]: [...prev[activeShot], ...uploadedUrls]
+      }));
+      onShowToast(`${uploadedUrls.length} screenshot${uploadedUrls.length > 1 ? "s" : ""} uploaded!`);
+    }
+
+    // reset the input so selecting the same file again still fires onChange
+    e.target.value = "";
+  };
+
+  const handleRemoveScreenshot = (tab: ShotTab, index: number) => {
+    setScreenshots((prev) => ({
+      ...prev,
+      [tab]: prev[tab].filter((_, i) => i !== index)
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -123,7 +144,7 @@ export default function TradeForm({ onSaveTrade, onShowToast }: Props) {
       setPnl("");
       setPreTradeNotes("");
       setNotes("");
-      setScreenshots({ before: null, after: null, analysis: null });
+      setScreenshots({ before: [], after: [], analysis: [] });
       onShowToast("Trade logged successfully!");
     } catch {
       onShowToast("Failed to save trade.");
@@ -349,37 +370,104 @@ export default function TradeForm({ onSaveTrade, onShowToast }: Props) {
 
         <div className="screenshots-panel" style={{ marginTop: "16px" }}>
           <div className="segmented">
-            <button
-              type="button"
-              className={activeShot === "before" ? "is-active" : ""}
-              onClick={() => setActiveShot("before")}
-            >
-              Before
-            </button>
-            <button
-              type="button"
-              className={activeShot === "after" ? "is-active" : ""}
-              onClick={() => setActiveShot("after")}
-            >
-              After
-            </button>
-            <button
-              type="button"
-              className={activeShot === "analysis" ? "is-active" : ""}
-              onClick={() => setActiveShot("analysis")}
-            >
-              Analysis
-            </button>
+            {(["before", "after", "analysis"] as ShotTab[]).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={activeShot === tab ? "is-active" : ""}
+                onClick={() => setActiveShot(tab)}
+                style={{ textTransform: "capitalize" }}
+              >
+                {tab} {screenshots[tab].length > 0 && `(${screenshots[tab].length})`}
+              </button>
+            ))}
           </div>
 
-          <div style={{ marginTop: "10px" }}>
-            <input type="file" accept="image/*" onChange={handleFileUpload} />
-            {screenshots[activeShot] && (
-              <p style={{ fontSize: "12px", color: "var(--accent)", marginTop: "6px" }}>
-                ✓ Screenshot saved for {activeShot}
-              </p>
-            )}
-          </div>
+          <label
+            htmlFor="screenshot-upload"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+              marginTop: "12px",
+              padding: "24px",
+              borderRadius: "10px",
+              border: "1.5px dashed rgba(var(--color-white-rgb) / 0.15)",
+              background: "rgba(var(--color-white-rgb) / 0.02)",
+              cursor: "pointer",
+              textAlign: "center"
+            }}
+          >
+            <span style={{ fontSize: "20px" }}>📎</span>
+            <span style={{ fontSize: "13px", color: "var(--text)", fontWeight: 600 }}>
+              Click to upload screenshots
+            </span>
+            <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+              You can select multiple images at once for &quot;{activeShot}&quot;
+            </span>
+            <input
+              id="screenshot-upload"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileUpload}
+              style={{ display: "none" }}
+            />
+          </label>
+
+          {screenshots[activeShot].length > 0 && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))",
+                gap: "10px",
+                marginTop: "14px"
+              }}
+            >
+              {screenshots[activeShot].map((url, index) => (
+                <div
+                  key={`${activeShot}-${index}`}
+                  style={{
+                    position: "relative",
+                    borderRadius: "8px",
+                    overflow: "hidden",
+                    border: "1px solid rgba(var(--color-white-rgb) / 0.1)",
+                    aspectRatio: "1 / 1"
+                  }}
+                >
+                  <img
+                    src={url}
+                    alt={`${activeShot} screenshot ${index + 1}`}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveScreenshot(activeShot, index)}
+                    title="Remove screenshot"
+                    style={{
+                      position: "absolute",
+                      top: "4px",
+                      right: "4px",
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "50%",
+                      border: "none",
+                      background: "rgba(0,0,0,0.65)",
+                      color: "#fff",
+                      fontSize: "12px",
+                      lineHeight: "20px",
+                      cursor: "pointer",
+                      padding: 0
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="form-actions">

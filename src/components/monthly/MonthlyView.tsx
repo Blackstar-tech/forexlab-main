@@ -3,14 +3,16 @@
 import React, { useState } from "react";
 import { Trade, MonthlyTarget } from "@/utils/types";
 import { currency, percent } from "@/utils/formatters";
+import MonthYearPicker from "./MonthYearPicker";
 
 interface Props {
   trades: Trade[];
   accountBalance: number;
+  selectedMonth: string;                 // format "YYYY-MM"
+  onMonthChange: (month: string) => void;
 }
 
-export default function MonthlyView({ trades, accountBalance }: Props) {
-  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
+export default function MonthlyView({ trades, accountBalance, selectedMonth, onMonthChange }: Props) {
   const [targetMode, setTargetMode] = useState<"currency" | "percent">("currency");
   const [targetValue, setTargetValue] = useState<number>(2000);
 
@@ -54,12 +56,7 @@ export default function MonthlyView({ trades, accountBalance }: Props) {
             <p>Target for {selectedMonth}</p>
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              style={{ maxWidth: "180px" }}
-            />
+            <MonthYearPicker value={selectedMonth} onChange={onMonthChange} />
           </div>
         </div>
 

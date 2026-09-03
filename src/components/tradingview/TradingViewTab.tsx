@@ -42,12 +42,21 @@ export default function TradingViewTab({ defaultSymbol = "FX:EURUSD" }: Props) {
     const el = containerRef.current;
     if (!el) return;
 
+    // Measure the container's REAL pixel height before wiping it.
+    // Rebuilding with a fresh "height: 100%" on the widget wrapper can
+    // resolve to a shrunk value right after a DOM clear (some browsers
+    // recompute min/max-height clamps against the emptied content before
+    // the new iframe paints). Locking in an explicit pixel value instead
+    // sidesteps that timing bug entirely — this is what was causing the
+    // chart to shrink every time you switched pairs.
+    const measuredHeight = el.getBoundingClientRect().height;
+
     // Clear previous widget instance
     el.innerHTML = "";
 
     const widgetContainer = document.createElement("div");
     widgetContainer.className = "tradingview-widget-container__widget";
-    widgetContainer.style.height = "100%";
+    widgetContainer.style.height = measuredHeight > 0 ? `${measuredHeight}px` : "100%";
     widgetContainer.style.width = "100%";
     el.appendChild(widgetContainer);
 
@@ -79,8 +88,31 @@ export default function TradingViewTab({ defaultSymbol = "FX:EURUSD" }: Props) {
   }, [selectedSymbol, theme]);
 
   return (
-    <section className="panel" style={{ padding: "22px", display: "flex", flexDirection: "column", minHeight: "800px" }}>
-      <div className="panel-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+    <section
+      className="panel panel-wide"
+      style={{
+        padding: "22px",
+        display: "flex",
+        flexDirection: "column",
+        // Fills the remaining viewport height below the app header instead
+        // of a guessed vh number. Adjust the 120px offset below if your
+        // header/topbar takes up more or less vertical space than that.
+        height: "calc(100vh - 120px)",
+        minHeight: "600px"
+      }}
+    >
+      <div
+        className="panel-title"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "12px",
+          marginBottom: "16px",
+          flexShrink: 0
+        }}
+      >
         <div>
           <h2>🕯️ Live TradingView Terminal</h2>
           <p>Interactive charting and technical analysis embedded directly in your journal.</p>
@@ -102,7 +134,15 @@ export default function TradingViewTab({ defaultSymbol = "FX:EURUSD" }: Props) {
       <div
         ref={containerRef}
         className="tradingview-widget-container"
-        style={{ flex: 1, minHeight: "680px", width: "100%", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--line)" }}
+        style={{
+          position: "relative",
+          flex: "1 1 auto",
+          minHeight: 0,
+          width: "100%",
+          borderRadius: "8px",
+          overflow: "hidden",
+          border: "1px solid var(--line)"
+        }}
       />
     </section>
   );

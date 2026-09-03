@@ -18,10 +18,12 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [startingBalance, setStartingBalance] = useState<number>(50000);
+  const accountBalance = startingBalance + trades.reduce((sum, t) => sum + t.pnl, 0);
   const [caseStudies, setCaseStudies] = useState<CaseStudy[]>([]);
-  const [accountBalance, setAccountBalance] = useState<number>(50000);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
 
   useEffect(() => {
     const saved = localStorage.getItem("forexlab.sidebarCollapsed");
@@ -66,7 +68,7 @@ export default function Home() {
       const storedBalance = localStorage.getItem("forexlab.accountBalance.v1");
       if (storedBalance) {
         const parsed = parseFloat(storedBalance);
-        if (!isNaN(parsed)) setAccountBalance(parsed);
+        if (!isNaN(parsed)) setStartingBalance(parsed);
       }
     } catch {
       setUser(null);
@@ -79,10 +81,10 @@ export default function Home() {
     loadUserData();
   }, [loadUserData]);
 
-  const handleUpdateBalance = (newBalance: number) => {
-    setAccountBalance(newBalance);
-    localStorage.setItem("forexlab.accountBalance.v1", newBalance.toString());
-    showToast(`Account balance updated to $${newBalance.toLocaleString()}`);
+  const handleUpdateBalance = (newStartingBalance: number) => {
+    setStartingBalance(newStartingBalance);
+    localStorage.setItem("forexlab.accountBalance.v1", newStartingBalance.toString());
+    showToast(`Starting balance updated to $${newStartingBalance.toLocaleString()}`);
   };
 
   const handleLogout = async () => {
@@ -244,8 +246,11 @@ export default function Home() {
           user={user}
           trades={trades}
           accountBalance={accountBalance}
+          startingBalance={startingBalance}
           onUpdateBalance={handleUpdateBalance}
           onLogout={handleLogout}
+          selectedMonth={selectedMonth}
+          isMonthlyView={activeTab === "monthly"}
         />
 
         {activeTab === "dashboard" && (
@@ -258,7 +263,12 @@ export default function Home() {
           <TradeHistory trades={trades} onDeleteTrade={handleDeleteTrade} onShowToast={showToast} />
         )}
         {activeTab === "monthly" && (
-          <MonthlyView trades={trades} accountBalance={accountBalance} />
+          <MonthlyView
+            trades={trades}
+            accountBalance={accountBalance}
+            selectedMonth={selectedMonth}
+            onMonthChange={setSelectedMonth}
+          />
         )}
         {activeTab === "analytics" && (
           <AnalyticsView trades={trades} />

@@ -8,19 +8,25 @@ interface Props {
   user: User | null;
   trades: Trade[];
   accountBalance: number;
+  startingBalance: number;
   onUpdateBalance: (newBalance: number) => void;
   onLogout: () => void;
+  selectedMonth: string;
+  isMonthlyView: boolean;
 }
 
 export default function Header({
   user,
   trades,
   accountBalance,
+  startingBalance,
   onUpdateBalance,
-  onLogout
+  onLogout,
+  selectedMonth,
+  isMonthlyView
 }: Props) {
   const [editingBalance, setEditingBalance] = useState(false);
-  const [tempBalance, setTempBalance] = useState(accountBalance.toString());
+  const [tempBalance, setTempBalance] = useState(startingBalance.toString());
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -43,14 +49,28 @@ export default function Header({
     window.dispatchEvent(new CustomEvent("themechange", { detail: { theme: nextTheme } }));
   };
 
-  const total = trades.length;
-  const wins = trades.filter((t) => t.result === "win").length;
-  const losses = trades.filter((t) => t.result === "loss").length;
-  const breakeven = trades.filter((t) => t.result === "breakeven").length;
+  const displayTrades = isMonthlyView
+    ? trades.filter((t) => t.date.startsWith(selectedMonth))
+    : trades;
+
+  const total = displayTrades.length;
+  const wins = displayTrades.filter((t) => t.result === "win").length;
+  const losses = displayTrades.filter((t) => t.result === "loss").length;
+  const breakeven = displayTrades.filter((t) => t.result === "breakeven").length;
   const winRate = total ? (wins / total) * 100 : 0;
-  const netPnl = trades.reduce((sum, t) => sum + t.pnl, 0);
-  const rated = trades.filter((t) => t.rating > 0);
+  const netPnl = displayTrades.reduce((sum, t) => sum + t.pnl, 0);
+  const rated = displayTrades.filter((t) => t.rating > 0);
   const avgRating = rated.length ? (rated.reduce((sum, t) => sum + t.rating, 0) / rated.length).toFixed(1) : "-";
+
+  const monthLabel = (() => {
+    if (!isMonthlyView) return null;
+    const [yearStr, monthStr] = selectedMonth.split("-");
+    const year = parseInt(yearStr, 10);
+    const monthIndex = parseInt(monthStr, 10) - 1;
+    const date = new Date(year, monthIndex, 1);
+    const monthName = date.toLocaleString("en-US", { month: "long" });
+    return `Stats for ${monthName} ${year}`;
+  })();
 
   const handleBalanceSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,27 +91,34 @@ export default function Header({
         </div>
 
         <div className="topbar-actions" style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "13px", color: "var(--muted)" }}>ACCOUNT BALANCE</span>
-            {editingBalance ? (
-              <form onSubmit={handleBalanceSubmit} style={{ display: "inline-flex", gap: "6px" }}>
-                <input
-                  type="number"
-                  value={tempBalance}
-                  onChange={(e) => setTempBalance(e.target.value)}
-                  style={{ width: "120px", padding: "4px 8px" }}
-                  autoFocus
-                />
-                <button type="submit" className="primary compact">Save</button>
-              </form>
-            ) : (
-              <strong
-                onClick={() => { setTempBalance(accountBalance.toString()); setEditingBalance(true); }}
-                style={{ cursor: "pointer", color: "var(--text)", textDecoration: "underline dotted" }}
-                title="Click to edit balance"
-              >
-                {currency(accountBalance)} ✏️
-              </strong>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "13px", color: "var(--muted)" }}>ACCOUNT BALANCE</span>
+              {editingBalance ? (
+                <form onSubmit={handleBalanceSubmit} style={{ display: "inline-flex", gap: "6px" }}>
+                  <input
+                    type="number"
+                    value={tempBalance}
+                    onChange={(e) => setTempBalance(e.target.value)}
+                    style={{ width: "120px", padding: "4px 8px" }}
+                    autoFocus
+                  />
+                  <button type="submit" className="primary compact">Save</button>
+                </form>
+              ) : (
+                <strong
+                  onClick={() => { setTempBalance(startingBalance.toString()); setEditingBalance(true); }}
+                  style={{ cursor: "pointer", color: "var(--text)", textDecoration: "underline dotted" }}
+                  title="Click to edit balance"
+                >
+                  {currency(accountBalance)} ✏️
+                </strong>
+              )}
+            </div>
+            {!editingBalance && (
+              <small style={{ display: "block", fontSize: "10px", color: "var(--muted)" }}>
+                Starting: {currency(startingBalance)}
+              </small>
             )}
           </div>
           <button
@@ -109,6 +136,12 @@ export default function Header({
           </button>
         </div>
       </div>
+
+      {isMonthlyView && monthLabel && (
+        <div style={{ marginTop: "16px", fontSize: "13px", color: "var(--muted)" }}>
+          {monthLabel}
+        </div>
+      )}
 
       <section className="metrics-grid" style={{ marginTop: "16px" }}>
         <article className="metric">

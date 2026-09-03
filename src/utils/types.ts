@@ -6,9 +6,9 @@ export type TabKey = "dashboard" | "log" | "history" | "monthly" | "analytics" |
 export type ShotTab = "before" | "after" | "analysis";
 
 export interface TradeScreenshots {
-  before: string | null;
-  after: string | null;
-  analysis: string | null;
+  before: string[];
+  after: string[];
+  analysis: string[];
 }
 
 export interface Trade {
