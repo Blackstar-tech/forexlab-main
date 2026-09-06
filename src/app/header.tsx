@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { User, Trade, TabKey } from "@/utils/types";
+import { User, Trade, TabKey, BalanceCheckpoint } from "@/utils/types";
 import { currency, percent } from "@/utils/formatters";
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
   trades: Trade[];
   accountBalance: number;
   startingBalance: number;
+  checkpoints?: BalanceCheckpoint[];
   onUpdateBalance: (newBalance: number) => void;
   onLogout: () => void;
   selectedMonth: string;
@@ -23,6 +24,7 @@ export default function Header({
   trades,
   accountBalance,
   startingBalance,
+  checkpoints = [],
   onUpdateBalance,
   onLogout,
   selectedMonth,
@@ -32,10 +34,18 @@ export default function Header({
   onTabChange
 }: Props) {
   const [editingBalance, setEditingBalance] = useState(false);
-  const [tempBalance, setTempBalance] = useState(startingBalance.toString());
+  const [tempBalance, setTempBalance] = useState(accountBalance.toString());
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const latestCheckpoint = checkpoints && checkpoints.length > 0
+    ? [...checkpoints].sort((a, b) => {
+        const diff = new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime();
+        if (diff !== 0) return diff;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      })[0]
+    : null;
 
   useEffect(() => {
     setTempBalance(startingBalance.toString());
@@ -155,18 +165,26 @@ export default function Header({
                 <form onSubmit={handleBalanceSubmit} style={{ display: "inline-flex", gap: "6px" }}>
                   <input
                     type="number"
+                    step="any"
                     value={tempBalance}
                     onChange={(e) => setTempBalance(e.target.value)}
                     style={{ width: "120px", padding: "4px 8px" }}
                     autoFocus
                   />
                   <button type="submit" className="primary compact">Save</button>
+                  <button
+                    type="button"
+                    className="ghost compact"
+                    onClick={() => setEditingBalance(false)}
+                  >
+                    ✕
+                  </button>
                 </form>
               ) : (
                 <strong
-                  onClick={() => { setTempBalance(startingBalance.toString()); setEditingBalance(true); }}
+                  onClick={() => { setTempBalance(accountBalance.toString()); setEditingBalance(true); }}
                   style={{ cursor: "pointer", color: "var(--text)", textDecoration: "underline dotted" }}
-                  title="Click to edit balance"
+                  title="Click to set balance checkpoint"
                 >
                   {currency(accountBalance)} ✏️
                 </strong>
@@ -174,7 +192,9 @@ export default function Header({
             </div>
             {!editingBalance && (
               <small className="balance-starting-note" style={{ display: "block", fontSize: "10px", color: "var(--muted)" }}>
-                Starting: {currency(startingBalance)}
+                {latestCheckpoint
+                  ? `Checkpoint: ${currency(latestCheckpoint.balance)} (${latestCheckpoint.effectiveFrom.slice(0, 10)})`
+                  : `Starting: ${currency(startingBalance)}`}
               </small>
             )}
           </div>

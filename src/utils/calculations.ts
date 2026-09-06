@@ -4,6 +4,7 @@ import type {
   Trade,
   TradeSummary,
   TraderLevel,
+  BalanceCheckpoint,
 } from "./types";
 
 export function tradesChronological(trades: Trade[]): Trade[] {
@@ -226,4 +227,38 @@ export function calculateRr(
   const reward = direction === "buy" ? take - entry : entry - take;
   if (risk <= 0 || reward <= 0) return null;
   return Number((reward / risk).toFixed(2));
+}
+
+/**
+ * Calculates current account balance using balance checkpoints:
+ * Uses the most recent checkpoint's balance + sum of trade profits where
+ * trade.date >= checkpoint.effective_from (fallback to existing default logic if no checkpoint exists yet).
+ */
+export function calculateCurrentBalance(
+  checkpoints: BalanceCheckpoint[],
+  trades: Trade[],
+  fallbackStartingBalance: number = 0
+): number {
+  if (!checkpoints || checkpoints.length === 0) {
+    return fallbackStartingBalance + trades.reduce((sum, t) => sum + t.pnl, 0);
+  }
+
+  // Find most recent checkpoint by effectiveFrom (with createdAt as tie breaker)
+  const sorted = [...checkpoints].sort((a, b) => {
+    const diff = new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime();
+    if (diff !== 0) return diff;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
+  const latest = sorted[0];
+  const effectiveDate = latest.effectiveFrom.includes("T")
+    ? latest.effectiveFrom.slice(0, 10)
+    : latest.effectiveFrom;
+
+  // Sum of trade profits where trade.date >= checkpoint.effective_from
+  const subsequentPnl = trades
+    .filter((t) => t.date >= effectiveDate)
+    .reduce((sum, t) => sum + t.pnl, 0);
+
+  return latest.balance + subsequentPnl;
 }

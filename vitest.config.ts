@@ -4,7 +4,8 @@ import path from "path";
 export default defineConfig({
   test: {
     environment: "node",
-    setupFiles: ["./test-setup.js"]
+    setupFiles: ["./test-setup.js"],
+    fileParallelism: false
   },
   resolve: {
     alias: {

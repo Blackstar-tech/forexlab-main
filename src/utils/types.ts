@@ -47,6 +47,14 @@ export interface User {
   createdAt: string;
 }
 
+export interface BalanceCheckpoint {
+  id: string;
+  userId: string;
+  balance: number;
+  effectiveFrom: string; // ISO string or "YYYY-MM-DD"
+  createdAt: string;
+}
+
 export interface CaseStudy {
   id: string;
   userId: string;

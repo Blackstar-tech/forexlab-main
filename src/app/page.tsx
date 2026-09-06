@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { User, Trade, CaseStudy, TabKey } from "@/utils/types";
+import { User, Trade, CaseStudy, TabKey, BalanceCheckpoint } from "@/utils/types";
+import { calculateCurrentBalance } from "@/utils/calculations";
 import Header from "./header";
 import Footer from "./footer";
 import AuthModal from "@/components/auth/AuthModal";
@@ -30,8 +31,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [checkpoints, setCheckpoints] = useState<BalanceCheckpoint[]>([]);
   const [startingBalance, setStartingBalance] = useState<number>(0);
-  const accountBalance = startingBalance + trades.reduce((sum, t) => sum + t.pnl, 0);
+  const accountBalance = calculateCurrentBalance(checkpoints, trades, startingBalance);
   const [caseStudies, setCaseStudies] = useState<CaseStudy[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -77,6 +79,13 @@ export default function Home() {
         setCaseStudies(csData.caseStudies || []);
       }
 
+      // Load balance checkpoints
+      const cpRes = await fetch("/api/balance-checkpoints");
+      if (cpRes.ok) {
+        const cpData = await cpRes.json();
+        setCheckpoints(cpData.checkpoints || []);
+      }
+
       // Load balance from storage scoped to current user
       if (meData.user?.id) {
         const storedBalance = localStorage.getItem(`forexlab.accountBalance.${meData.user.id}`);
@@ -93,6 +102,7 @@ export default function Home() {
     } catch {
       setUser(null);
       setStartingBalance(0);
+      setCheckpoints([]);
     } finally {
       setLoading(false);
     }
@@ -102,14 +112,49 @@ export default function Home() {
     loadUserData();
   }, [loadUserData]);
 
-  const handleUpdateBalance = (newStartingBalance: number) => {
-    setStartingBalance(newStartingBalance);
-    if (user?.id) {
-      localStorage.setItem(`forexlab.accountBalance.${user.id}`, newStartingBalance.toString());
-    } else {
-      localStorage.setItem("forexlab.accountBalance.v1", newStartingBalance.toString());
+  const handleUpdateBalance = async (newBalance: number, effectiveFrom?: string) => {
+    try {
+      const res = await fetch("/api/balance-checkpoints", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          balance: newBalance,
+          effectiveFrom: effectiveFrom || new Date().toISOString()
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.checkpoint) {
+          setCheckpoints((prev) => [...prev, data.checkpoint]);
+          showToast(`Balance checkpoint set to $${newBalance.toLocaleString()}`);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to save balance checkpoint:", err);
     }
-    showToast(`Starting balance updated to $${newStartingBalance.toLocaleString()}`);
+
+    // Fallback if not logged in or endpoint fails
+    setStartingBalance(newBalance);
+    if (user?.id) {
+      localStorage.setItem(`forexlab.accountBalance.${user.id}`, newBalance.toString());
+    } else {
+      localStorage.setItem("forexlab.accountBalance.v1", newBalance.toString());
+    }
+    showToast(`Starting balance updated to $${newBalance.toLocaleString()}`);
+  };
+
+  const handleDeleteCheckpoint = async (id: string) => {
+    try {
+      const res = await fetch(`/api/balance-checkpoints?id=${encodeURIComponent(id)}`, {
+        method: "DELETE"
+      });
+      if (!res.ok) throw new Error("Failed to delete checkpoint");
+      setCheckpoints((prev) => prev.filter((c) => c.id !== id));
+      showToast("Checkpoint deleted.");
+    } catch {
+      showToast("Failed to delete checkpoint.");
+    }
   };
 
   const handleLogout = async () => {
@@ -117,6 +162,7 @@ export default function Home() {
     setUser(null);
     setTrades([]);
     setCaseStudies([]);
+    setCheckpoints([]);
     setStartingBalance(0);
     showToast("Signed out.");
   };
@@ -232,6 +278,7 @@ export default function Home() {
           trades={trades}
           accountBalance={accountBalance}
           startingBalance={startingBalance}
+          checkpoints={checkpoints}
           onUpdateBalance={handleUpdateBalance}
           onLogout={handleLogout}
           selectedMonth={selectedMonth}
@@ -248,7 +295,14 @@ export default function Home() {
           <TradeForm onSaveTrade={handleSaveTrade} onShowToast={showToast} />
         )}
         {activeTab === "history" && (
-          <TradeHistory trades={trades} onDeleteTrade={handleDeleteTrade} onShowToast={showToast} />
+          <TradeHistory
+            trades={trades}
+            checkpoints={checkpoints}
+            onDeleteTrade={handleDeleteTrade}
+            onDeleteCheckpoint={handleDeleteCheckpoint}
+            onAddCheckpoint={handleUpdateBalance}
+            onShowToast={showToast}
+          />
         )}
         {activeTab === "monthly" && (
           <MonthlyView

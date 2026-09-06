@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { User, Trade, CaseStudy } from "./types";
+import { User, Trade, CaseStudy, BalanceCheckpoint } from "./types";
 
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_KEY || "";
@@ -35,12 +35,20 @@ export type DbSchema = {
   trades: Trade[];
   caseStudies: CaseStudy[];
   passwordResets: Array<{ token: string; userId: string; expiresAt: string; used: boolean }>;
+  balanceCheckpoints: BalanceCheckpoint[];
 };
 
 export async function readLocalDb(): Promise<DbSchema> {
   const file = getDbPath();
   if (!fs.existsSync(file)) {
-    const initial: DbSchema = { users: [], sessions: [], trades: [], caseStudies: [], passwordResets: [] };
+    const initial: DbSchema = {
+      users: [],
+      sessions: [],
+      trades: [],
+      caseStudies: [],
+      passwordResets: [],
+      balanceCheckpoints: []
+    };
     fs.writeFileSync(file, JSON.stringify(initial, null, 2));
     return initial;
   }
@@ -50,9 +58,19 @@ export async function readLocalDb(): Promise<DbSchema> {
     if (!Array.isArray(data.passwordResets)) {
       data.passwordResets = [];
     }
+    if (!Array.isArray(data.balanceCheckpoints)) {
+      data.balanceCheckpoints = [];
+    }
     return data;
   } catch {
-    return { users: [], sessions: [], trades: [], caseStudies: [], passwordResets: [] };
+    return {
+      users: [],
+      sessions: [],
+      trades: [],
+      caseStudies: [],
+      passwordResets: [],
+      balanceCheckpoints: []
+    };
   }
 }
 
