@@ -46,7 +46,11 @@ export async function readLocalDb(): Promise<DbSchema> {
   }
   try {
     const raw = fs.readFileSync(file, "utf-8");
-    return JSON.parse(raw);
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data.passwordResets)) {
+      data.passwordResets = [];
+    }
+    return data;
   } catch {
     return { users: [], sessions: [], trades: [], caseStudies: [], passwordResets: [] };
   }

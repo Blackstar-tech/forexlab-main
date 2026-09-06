@@ -15,6 +15,7 @@ export default function AuthModal({ onLoginSuccess, onShowToast }: Props) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [forgotSuccess, setForgotSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,8 +56,8 @@ export default function AuthModal({ onLoginSuccess, onShowToast }: Props) {
           body: JSON.stringify({ email })
         });
         const data = await res.json();
+        setForgotSuccess(true);
         onShowToast(data.message || "Reset link requested.");
-        setMode("login");
       }
     } catch {
       setError("Network error occurred.");
@@ -85,14 +86,14 @@ export default function AuthModal({ onLoginSuccess, onShowToast }: Props) {
           <button
             type="button"
             className={mode === "login" ? "is-active" : ""}
-            onClick={() => { setMode("login"); setError(""); }}
+            onClick={() => { setMode("login"); setError(""); setForgotSuccess(false); }}
           >
             Sign in
           </button>
           <button
             type="button"
             className={mode === "signup" ? "is-active" : ""}
-            onClick={() => { setMode("signup"); setError(""); }}
+            onClick={() => { setMode("signup"); setError(""); setForgotSuccess(false); }}
           >
             Create account
           </button>
@@ -104,36 +105,52 @@ export default function AuthModal({ onLoginSuccess, onShowToast }: Props) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: "grid", gap: "14px" }}>
-          {mode === "signup" && (
+        {mode === "forgot" && forgotSuccess ? (
+          <div>
+            <div style={{ background: "rgba(34, 224, 143, 0.15)", border: "1px solid var(--color-profit)", color: "var(--color-profit)", padding: "14px", borderRadius: "6px", marginBottom: "16px", fontSize: "13px", lineHeight: "1.5" }}>
+              <strong>Reset link sent!</strong> If an account is associated with <strong>{email}</strong>, you will receive an email shortly with a link to reset your password. This link expires in 1 hour.
+            </div>
+            <button
+              type="button"
+              className="primary"
+              style={{ width: "100%" }}
+              onClick={() => { setMode("login"); setForgotSuccess(false); setError(""); }}
+            >
+              Back to Sign in
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} style={{ display: "grid", gap: "14px" }}>
+            {mode === "signup" && (
+              <label>
+                Your Name
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
+              </label>
+            )}
             <label>
-              Your Name
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
+              Email Address
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </label>
-          )}
-          <label>
-            Email Address
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </label>
-          {mode !== "forgot" && (
-            <label>
-              Password
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            </label>
-          )}
+            {mode !== "forgot" && (
+              <label>
+                Password
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              </label>
+            )}
 
-          <button type="submit" className="primary" disabled={loading} style={{ width: "100%", marginTop: "8px" }}>
-            {loading ? "Processing..." : mode === "login" ? "Sign In" : mode === "signup" ? "Create Account" : "Send Reset Link"}
-          </button>
-        </form>
+            <button type="submit" className="primary" disabled={loading} style={{ width: "100%", marginTop: "8px" }}>
+              {loading ? "Processing..." : mode === "login" ? "Sign In" : mode === "signup" ? "Create Account" : "Send Reset Link"}
+            </button>
+          </form>
+        )}
 
         <div style={{ textAlign: "center", marginTop: "16px" }}>
           {mode === "login" ? (
-            <button type="button" className="ghost compact" onClick={() => setMode("forgot")}>
+            <button type="button" className="ghost compact" onClick={() => { setMode("forgot"); setError(""); setForgotSuccess(false); }}>
               Forgot password?
             </button>
           ) : (
-            <button type="button" className="ghost compact" onClick={() => setMode("login")}>
+            <button type="button" className="ghost compact" onClick={() => { setMode("login"); setError(""); setForgotSuccess(false); }}>
               Back to Sign in
             </button>
           )}
