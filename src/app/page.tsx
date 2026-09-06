@@ -12,12 +12,14 @@ import MonthlyView from "@/components/monthly/MonthlyView";
 import AnalyticsView from "@/components/analytics/AnalyticsView";
 import CaseStudyView from "@/components/casestudy/CaseStudyView";
 import TradingViewTab from "@/components/tradingview/TradingViewTab";
+import CalculatorView from "@/components/calculator/CalculatorView";
 
 const NAV_ITEMS: { key: TabKey; icon: string; label: string }[] = [
   { key: "dashboard", icon: "📊", label: "Dashboard" },
   { key: "log", icon: "📋", label: "Log Trade" },
   { key: "history", icon: "📜", label: "History" },
   { key: "monthly", icon: "📅", label: "Monthly P&L" },
+  { key: "calculator", icon: "🧮", label: "Calculator" },
   { key: "analytics", icon: "📈", label: "Analytics" },
   { key: "casestudy", icon: "🔬", label: "Case Studies" },
   { key: "tradingview", icon: "🕯️", label: "TradingView" }
@@ -250,6 +252,16 @@ export default function Home() {
         )}
         {activeTab === "monthly" && (
           <MonthlyView
+            trades={trades}
+            accountBalance={accountBalance}
+            selectedMonth={selectedMonth}
+            onMonthChange={setSelectedMonth}
+            userId={user?.id}
+            onShowToast={showToast}
+          />
+        )}
+        {activeTab === "calculator" && (
+          <CalculatorView
             trades={trades}
             accountBalance={accountBalance}
             selectedMonth={selectedMonth}

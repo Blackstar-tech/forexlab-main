@@ -1,7 +1,7 @@
 export type TradeResult = "win" | "loss" | "breakeven";
 export type TradeDirection = "buy" | "sell";
 export type TargetMode = "currency" | "percent";
-export type TabKey = "dashboard" | "log" | "history" | "monthly" | "analytics" | "casestudy" | "tradingview";
+export type TabKey = "dashboard" | "log" | "history" | "monthly" | "analytics" | "casestudy" | "tradingview" | "calculator";
 
 export type ShotTab = "before" | "after" | "analysis";
 
