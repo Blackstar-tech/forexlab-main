@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { Trade, MonthlyTarget } from "@/utils/types";
+import React, { useState, useEffect } from "react";
+import { Trade } from "@/utils/types";
 import { currency, percent } from "@/utils/formatters";
 import MonthYearPicker from "./MonthYearPicker";
 
@@ -10,17 +10,99 @@ interface Props {
   accountBalance: number;
   selectedMonth: string;                 // format "YYYY-MM"
   onMonthChange: (month: string) => void;
+  userId?: string;
+  onShowToast?: (msg: string) => void;
 }
 
-export default function MonthlyView({ trades, accountBalance, selectedMonth, onMonthChange }: Props) {
+export default function MonthlyView({
+  trades,
+  accountBalance,
+  selectedMonth,
+  onMonthChange,
+  userId,
+  onShowToast
+}: Props) {
   const [targetMode, setTargetMode] = useState<"currency" | "percent">("currency");
-  const [targetValue, setTargetValue] = useState<number>(2000);
+  const [targetValue, setTargetValue] = useState<number>(0);
+  const [isEditingGoal, setIsEditingGoal] = useState<boolean>(false);
+  const [tempTargetMode, setTempTargetMode] = useState<"currency" | "percent">("currency");
+  const [tempTargetValue, setTempTargetValue] = useState<string>("");
+
+  // Load monthly target from localStorage scoped to user and month
+  useEffect(() => {
+    const monthKey = `forexlab.monthlyTarget.${userId || "default"}.${selectedMonth}`;
+    const savedMonth = localStorage.getItem(monthKey);
+    if (savedMonth) {
+      try {
+        const parsed = JSON.parse(savedMonth);
+        if (parsed && typeof parsed.value === "number") {
+          const mode = parsed.mode === "percent" ? "percent" : "currency";
+          setTargetMode(mode);
+          setTargetValue(parsed.value);
+          setTempTargetMode(mode);
+          setTempTargetValue(parsed.value > 0 ? parsed.value.toString() : "");
+          return;
+        }
+      } catch (e) {
+        console.error("Failed to parse monthly target:", e);
+      }
+    }
+
+    // Check user default target
+    const defaultKey = `forexlab.monthlyTarget.${userId || "default"}.default`;
+    const savedDefault = localStorage.getItem(defaultKey);
+    if (savedDefault) {
+      try {
+        const parsed = JSON.parse(savedDefault);
+        if (parsed && typeof parsed.value === "number") {
+          const mode = parsed.mode === "percent" ? "percent" : "currency";
+          setTargetMode(mode);
+          setTargetValue(parsed.value);
+          setTempTargetMode(mode);
+          setTempTargetValue(parsed.value > 0 ? parsed.value.toString() : "");
+          return;
+        }
+      } catch (e) {
+        console.error("Failed to parse default target:", e);
+      }
+    }
+
+    // Brand new or unconfigured -> 0
+    setTargetMode("currency");
+    setTargetValue(0);
+    setTempTargetMode("currency");
+    setTempTargetValue("");
+  }, [selectedMonth, userId]);
+
+  const handleSaveGoal = (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = parseFloat(tempTargetValue);
+    const cleanVal = isNaN(val) || val < 0 ? 0 : val;
+
+    setTargetMode(tempTargetMode);
+    setTargetValue(cleanVal);
+
+    const data = { mode: tempTargetMode, value: cleanVal };
+    const monthKey = `forexlab.monthlyTarget.${userId || "default"}.${selectedMonth}`;
+    localStorage.setItem(monthKey, JSON.stringify(data));
+
+    // Save as fallback default for this user
+    const defaultKey = `forexlab.monthlyTarget.${userId || "default"}.default`;
+    localStorage.setItem(defaultKey, JSON.stringify(data));
+
+    setIsEditingGoal(false);
+
+    if (onShowToast) {
+      const calculatedTarget = tempTargetMode === "percent" ? (cleanVal / 100) * accountBalance : cleanVal;
+      const formatted = tempTargetMode === "percent"
+        ? `${cleanVal}% (${currency(calculatedTarget)})`
+        : currency(cleanVal);
+      onShowToast(`Monthly goal for ${selectedMonth} set to ${formatted}`);
+    }
+  };
 
   const monthTrades = trades.filter((t) => t.date.startsWith(selectedMonth));
   const monthlyTotal = monthTrades.reduce((sum, t) => sum + t.pnl, 0);
-  const monthlyWins = monthTrades.filter((t) => t.result === "win").length;
-  const monthlyLosses = monthTrades.filter((t) => t.result === "loss").length;
-  const monthlyWinRate = monthTrades.length ? (monthlyWins / monthTrades.length) * 100 : 0;
 
   // Calendar generation
   const [yearStr, monthStr] = selectedMonth.split("-");
@@ -50,24 +132,136 @@ export default function MonthlyView({ trades, accountBalance, selectedMonth, onM
       </div>
 
       <div className="monthly-goal">
-        <div className="monthly-goal-header">
+        <div className="monthly-goal-header" style={{ flexWrap: "wrap", gap: "14px", alignItems: "center" }}>
           <div>
             <h3>Monthly Profit Goal</h3>
             <p>Target for {selectedMonth}</p>
           </div>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <MonthYearPicker value={selectedMonth} onChange={onMonthChange} />
+            <button
+              type="button"
+              className={isEditingGoal ? "primary compact" : "ghost compact"}
+              onClick={() => {
+                if (!isEditingGoal) {
+                  setTempTargetMode(targetMode);
+                  setTempTargetValue(targetValue > 0 ? targetValue.toString() : "");
+                }
+                setIsEditingGoal(!isEditingGoal);
+              }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+              title="Set or edit your profit goal for this month"
+            >
+              {isEditingGoal ? "✕ Close" : targetValue > 0 ? "✏️ Edit Goal" : "🎯 Set Goal"}
+            </button>
           </div>
         </div>
+
+        {/* Set Goal Editor */}
+        {isEditingGoal && (
+          <form
+            onSubmit={handleSaveGoal}
+            className={`target-editor ${tempTargetMode === "percent" ? "has-base" : ""}`}
+            style={{
+              margin: "6px 0 10px",
+              padding: "16px",
+              background: "rgba(var(--color-white-rgb) / 0.03)",
+              borderRadius: "8px",
+              border: "1px solid var(--line)"
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--muted)", textTransform: "uppercase" }}>Type</span>
+              <div className="target-mode" aria-label="Target mode">
+                <button
+                  type="button"
+                  className={tempTargetMode === "currency" ? "is-active" : ""}
+                  onClick={() => setTempTargetMode("currency")}
+                  title="Fixed dollar target"
+                >
+                  $
+                </button>
+                <button
+                  type="button"
+                  className={tempTargetMode === "percent" ? "is-active" : ""}
+                  onClick={() => setTempTargetMode("percent")}
+                  title="Percentage of account balance target"
+                >
+                  %
+                </button>
+              </div>
+            </div>
+
+            <label className="target-field">
+              <span>{tempTargetMode === "currency" ? "Target Profit ($)" : "Target Return (%)"}</span>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={tempTargetValue}
+                onChange={(e) => setTempTargetValue(e.target.value)}
+                placeholder={tempTargetMode === "currency" ? "e.g. 2500" : "e.g. 5"}
+                autoFocus
+                required
+              />
+            </label>
+
+            {tempTargetMode === "percent" && (
+              <label className="target-field">
+                <span>Equivalent Dollar Goal</span>
+                <input
+                  type="text"
+                  value={currency(((parseFloat(tempTargetValue) || 0) / 100) * accountBalance)}
+                  disabled
+                  style={{ opacity: 0.8, cursor: "not-allowed" }}
+                />
+              </label>
+            )}
+
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <button type="submit" className="primary compact" style={{ minHeight: "38px" }}>
+                Save Goal
+              </button>
+              <button
+                type="button"
+                className="ghost compact"
+                style={{ minHeight: "38px" }}
+                onClick={() => setIsEditingGoal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
 
         <div className="goal-progress">
           <div className="goal-progress-track">
             <span style={{ width: `${targetAchievedPercent}%` }} />
           </div>
           <div className="goal-progress-meta">
-            <span>Goal: <strong>{currency(targetDollar)}</strong></span>
-            <span>Net: <strong className={monthlyTotal >= 0 ? "positive" : "negative"}>{currency(monthlyTotal)}</strong></span>
-            <span>Progress: <strong>{percent(targetAchievedPercent)}</strong></span>
+            <span>
+              Goal:{" "}
+              <strong
+                onClick={() => {
+                  setTempTargetMode(targetMode);
+                  setTempTargetValue(targetValue > 0 ? targetValue.toString() : "");
+                  setIsEditingGoal(true);
+                }}
+                style={{ cursor: "pointer", textDecoration: "underline dotted" }}
+                title="Click to edit monthly goal"
+              >
+                {targetDollar > 0 ? currency(targetDollar) : "$0.00 (Click to set) ✏️"}
+              </strong>
+              {targetMode === "percent" && targetValue > 0 && (
+                <small style={{ color: "var(--muted)", marginLeft: "4px" }}>({targetValue}%)</small>
+              )}
+            </span>
+            <span>
+              Net: <strong className={monthlyTotal >= 0 ? "positive" : "negative"}>{currency(monthlyTotal)}</strong>
+            </span>
+            <span>
+              Progress: <strong>{targetDollar > 0 ? percent(targetAchievedPercent) : "—"}</strong>
+            </span>
           </div>
         </div>
       </div>

@@ -38,6 +38,10 @@ export default function Header({
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setTempBalance(startingBalance.toString());
+  }, [startingBalance]);
+
+  useEffect(() => {
     const stored = localStorage.getItem("forexlab.theme");
     let initialTheme: "dark" | "light" = "dark";
     if (stored === "light" || stored === "dark") {

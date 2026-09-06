@@ -28,7 +28,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [startingBalance, setStartingBalance] = useState<number>(50000);
+  const [startingBalance, setStartingBalance] = useState<number>(0);
   const accountBalance = startingBalance + trades.reduce((sum, t) => sum + t.pnl, 0);
   const [caseStudies, setCaseStudies] = useState<CaseStudy[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -54,6 +54,7 @@ export default function Home() {
       const meRes = await fetch("/api/auth/me");
       if (!meRes.ok) {
         setUser(null);
+        setStartingBalance(0);
         setLoading(false);
         return;
       }
@@ -74,14 +75,22 @@ export default function Home() {
         setCaseStudies(csData.caseStudies || []);
       }
 
-      // Load balance from storage
-      const storedBalance = localStorage.getItem("forexlab.accountBalance.v1");
-      if (storedBalance) {
-        const parsed = parseFloat(storedBalance);
-        if (!isNaN(parsed)) setStartingBalance(parsed);
+      // Load balance from storage scoped to current user
+      if (meData.user?.id) {
+        const storedBalance = localStorage.getItem(`forexlab.accountBalance.${meData.user.id}`);
+        if (storedBalance !== null) {
+          const parsed = parseFloat(storedBalance);
+          setStartingBalance(!isNaN(parsed) ? parsed : 0);
+        } else {
+          // Brand new account defaults to zero
+          setStartingBalance(0);
+        }
+      } else {
+        setStartingBalance(0);
       }
     } catch {
       setUser(null);
+      setStartingBalance(0);
     } finally {
       setLoading(false);
     }
@@ -93,7 +102,11 @@ export default function Home() {
 
   const handleUpdateBalance = (newStartingBalance: number) => {
     setStartingBalance(newStartingBalance);
-    localStorage.setItem("forexlab.accountBalance.v1", newStartingBalance.toString());
+    if (user?.id) {
+      localStorage.setItem(`forexlab.accountBalance.${user.id}`, newStartingBalance.toString());
+    } else {
+      localStorage.setItem("forexlab.accountBalance.v1", newStartingBalance.toString());
+    }
     showToast(`Starting balance updated to $${newStartingBalance.toLocaleString()}`);
   };
 
@@ -102,6 +115,7 @@ export default function Home() {
     setUser(null);
     setTrades([]);
     setCaseStudies([]);
+    setStartingBalance(0);
     showToast("Signed out.");
   };
 
@@ -148,7 +162,17 @@ export default function Home() {
   }
 
   if (!user) {
-    return <AuthModal onLoginSuccess={(u) => { setUser(u); loadUserData(); }} onShowToast={showToast} />;
+    return (
+      <AuthModal
+        onLoginSuccess={(u) => {
+          setUser(u);
+          const userBalance = localStorage.getItem(`forexlab.accountBalance.${u.id}`);
+          setStartingBalance(userBalance !== null && !isNaN(parseFloat(userBalance)) ? parseFloat(userBalance) : 0);
+          loadUserData();
+        }}
+        onShowToast={showToast}
+      />
+    );
   }
 
   return (
@@ -230,6 +254,8 @@ export default function Home() {
             accountBalance={accountBalance}
             selectedMonth={selectedMonth}
             onMonthChange={setSelectedMonth}
+            userId={user?.id}
+            onShowToast={showToast}
           />
         )}
         {activeTab === "analytics" && (
