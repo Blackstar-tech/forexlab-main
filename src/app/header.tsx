@@ -132,6 +132,18 @@ export default function Header({
           </button>
           {menuOpen && (
             <div className="hamburger-menu-panel">
+              <button
+                type="button"
+                className="ghost"
+                onClick={toggleTheme}
+                title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                aria-label="Toggle theme"
+                style={{ display: "flex", alignItems: "center", width: "100%", gap: "8px" }}
+              >
+                <span>{theme === "dark" ? "☀️" : "🌙"}</span>
+                {theme === "dark" ? "Light Mode" : "Dark Mode"}
+              </button>
+              <div style={{ borderTop: "1px solid var(--line)", margin: "6px 0" }} />
               {navItems.map((item) => (
                 <button
                   key={item.key}
@@ -160,7 +172,6 @@ export default function Header({
         <div className="topbar-actions" style={{ display: "flex", gap: "12px", alignItems: "center" }}>
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span style={{ fontSize: "13px", color: "var(--muted)" }}>ACCOUNT BALANCE</span>
               {editingBalance ? (
                 <form onSubmit={handleBalanceSubmit} style={{ display: "inline-flex", gap: "6px" }}>
                   <input
@@ -198,16 +209,6 @@ export default function Header({
               </small>
             )}
           </div>
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={toggleTheme}
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            aria-label="Toggle theme"
-            style={{ margin: 0 }}
-          >
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button>
           <button type="button" className="ghost compact topbar-signout-desktop" onClick={onLogout}>
             Sign Out
           </button>
