@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { readLocalDb, writeLocalDb, useLocalDataStore, getSupabase, makeId } from "@/utils/server-db";
 import { Trade } from "@/utils/types";
 
+export const dynamic = "force-dynamic";
+
 async function getAuthUser() {
   const token = cookies().get("fj_session")?.value;
   if (!token) return null;
@@ -14,11 +16,18 @@ async function getAuthUser() {
     return user ? { id: user.id, name: user.name, email: user.email } : null;
   }
 
-  const { data: session } = await getSupabase()
+  const { data: session, error } = await getSupabase()
     .from("sessions")
     .select("*, users(*)")
     .eq("token", token)
     .single();
+
+  if (error) {
+    if (error.code !== "PGRST116") {
+      console.error("[Trades getAuthUser] Error fetching session:", error);
+    }
+    return null;
+  }
 
   if (!session || !session.users) return null;
   return { id: session.users.id, name: session.users.name, email: session.users.email };
@@ -45,6 +54,7 @@ export async function GET() {
     .order("created_at", { ascending: false });
 
   if (error) {
+    console.error("[Trades GET] Error fetching trades:", error);
     return NextResponse.json({ error: "Failed to fetch trades." }, { status: 500 });
   }
 
@@ -187,6 +197,7 @@ export async function DELETE(req: NextRequest) {
 
   const { error } = await getSupabase().from("trades").delete().eq("id", id).eq("user_id", user.id);
   if (error) {
+    console.error("[Trades DELETE] Error deleting trade:", error);
     return NextResponse.json({ error: "Failed to delete trade." }, { status: 500 });
   }
 
