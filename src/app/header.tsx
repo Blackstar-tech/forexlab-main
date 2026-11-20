@@ -80,6 +80,15 @@ export default function Header({
   }, []);
 
   useEffect(() => {
+    const syncTheme = (event: Event) => {
+      const nextTheme = (event as CustomEvent<{ theme?: "light" | "dark" }>).detail?.theme;
+      if (nextTheme === "light" || nextTheme === "dark") setTheme(nextTheme);
+    };
+    window.addEventListener("themechange", syncTheme);
+    return () => window.removeEventListener("themechange", syncTheme);
+  }, []);
+
+  useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (
         menuRef.current &&
@@ -527,14 +536,10 @@ export default function Header({
           background:
             radial-gradient(
               circle at 50% 0%,
-              rgba(45, 211, 160, 0.06),
+              color-mix(in srgb, var(--accent) 6%, transparent),
               transparent 38%
             ),
-            linear-gradient(
-              135deg,
-              rgba(10, 17, 20, 0.98),
-              rgba(5, 10, 13, 0.98)
-            );
+            var(--panel);
 
           border: 1px solid var(--line);
           border-radius: 22px;
@@ -576,12 +581,7 @@ export default function Header({
           border-radius: 50%;
           border: 1px solid rgba(135, 157, 165, 0.28);
 
-          background:
-            linear-gradient(
-              145deg,
-              rgba(19, 29, 33, 0.95),
-              rgba(7, 13, 16, 0.95)
-            );
+          background: var(--panel-soft);
 
           cursor: pointer;
 
@@ -597,7 +597,7 @@ export default function Header({
           border-color:
             color-mix(
               in srgb,
-              var(--positive) 50%,
+              var(--accent) 50%,
               var(--line)
             );
 
@@ -605,7 +605,7 @@ export default function Header({
             0 0 25px
             color-mix(
               in srgb,
-              var(--positive) 10%,
+              var(--accent) 10%,
               transparent
             );
         }
@@ -642,7 +642,7 @@ export default function Header({
           border-radius: 16px;
           border: 1px solid var(--line);
 
-          background: rgba(9, 15, 18, 0.98);
+          background: var(--panel-soft);
 
           box-shadow:
             0 22px 60px rgba(0, 0, 0, 0.4);
@@ -672,7 +672,7 @@ export default function Header({
           background:
             color-mix(
               in srgb,
-              var(--positive) 9%,
+              var(--accent) 9%,
               transparent
             );
         }
@@ -693,11 +693,11 @@ export default function Header({
           background:
             color-mix(
               in srgb,
-              var(--positive) 12%,
+              var(--accent) 12%,
               transparent
             ) !important;
 
-          color: var(--positive) !important;
+          color: var(--accent) !important;
         }
 
         .menu-item-icon {
@@ -705,7 +705,7 @@ export default function Header({
         }
 
         .menu-logout-button {
-          color: #ff6b6b !important;
+          color: var(--danger) !important;
         }
 
         .menu-divider {
@@ -736,7 +736,7 @@ export default function Header({
         }
 
         .brand-chart-icon rect {
-          fill: var(--positive);
+          fill: var(--accent);
         }
 
         .brand-name {
@@ -749,7 +749,7 @@ export default function Header({
         }
 
         .brand-name span {
-          color: var(--positive);
+          color: var(--accent);
         }
 
         .brand-tagline {
@@ -772,49 +772,26 @@ export default function Header({
 
           border-radius: 50%;
 
-          background: var(--positive);
+          background: var(--accent);
           opacity: 0.8;
         }
 
         /* BALANCE */
 
         .premium-balance {
-          min-width: 300px;
-          min-height: 76px;
+          min-width: 220px;
+          min-height: 60px;
 
           display: flex;
           align-items: center;
           justify-content: center;
 
-          padding: 0 24px;
+          padding: 0 12px;
 
-          border-radius: 999px;
-
-          border: 1px solid
-            color-mix(
-              in srgb,
-              var(--positive) 40%,
-              var(--line)
-            );
-
-          background:
-            radial-gradient(
-              circle at 50%,
-              color-mix(
-                in srgb,
-                var(--positive) 10%,
-                transparent
-              ),
-              transparent 70%
-            );
-
-          box-shadow:
-            inset 0 0 30px
-            color-mix(
-              in srgb,
-              var(--positive) 4%,
-              transparent
-            );
+          border: 1px solid transparent;
+          border-radius: 12px;
+          background: transparent;
+          box-shadow: none;
         }
 
         .balance-display {
@@ -824,40 +801,49 @@ export default function Header({
           align-items: center;
           justify-content: center;
 
-          gap: 14px;
+          gap: 0;
 
           padding: 0;
 
           border: none;
           background: transparent;
+          border-radius: 10px;
 
           cursor: pointer;
           color: var(--text);
+          transition: background 140ms ease;
+        }
+
+        .balance-display:hover {
+          background: rgb(var(--color-accent-rgb) / 0.055);
+        }
+
+        .balance-display:focus-visible {
+          outline: 2px solid var(--accent);
+          outline-offset: 2px;
         }
 
         .balance-wallet-icon {
-          width: 38px;
-          height: 38px;
-          flex-shrink: 0;
+          display: none;
         }
 
         .balance-wallet-icon rect,
         .balance-wallet-icon path,
         .balance-wallet-icon circle {
-          stroke: var(--positive);
+          stroke: var(--accent);
           stroke-width: 1.8;
         }
 
         .balance-text {
           display: flex;
           flex-direction: column;
-          align-items: flex-start;
+          align-items: center;
         }
 
         .balance-text strong {
-          font-size: 26px;
+          font-size: 22px;
           font-weight: 750;
-          letter-spacing: -0.5px;
+          letter-spacing: -0.35px;
 
           color: var(--text);
         }
@@ -865,20 +851,17 @@ export default function Header({
         .balance-text small {
           margin-top: 2px;
 
-          font-size: 12px;
+          font-size: 10px;
 
           color: var(--muted);
         }
 
         .balance-edit-icon {
-          width: 27px;
-          height: 27px;
-
-          flex-shrink: 0;
+          display: none;
         }
 
         .balance-edit-icon path {
-          stroke: var(--positive);
+          stroke: var(--accent);
           stroke-width: 1.8;
           stroke-linecap: round;
           stroke-linejoin: round;
@@ -901,7 +884,7 @@ export default function Header({
           border-radius: 10px;
           border: 1px solid var(--line);
 
-          background: rgba(0, 0, 0, 0.2);
+          background: rgb(var(--color-white-rgb) / 0.045);
 
           color: var(--text);
         }
@@ -918,8 +901,8 @@ export default function Header({
         }
 
         .balance-save {
-          background: var(--positive);
-          color: #04110c;
+          background: var(--accent);
+          color: var(--color-ink);
           font-weight: 700;
         }
 
@@ -949,12 +932,7 @@ export default function Header({
               var(--line)
             );
 
-          background:
-            linear-gradient(
-              145deg,
-              rgba(17, 27, 31, 0.7),
-              rgba(6, 12, 15, 0.75)
-            );
+          background: rgb(var(--color-white-rgb) / 0.025);
 
           color: var(--text);
 
@@ -975,14 +953,14 @@ export default function Header({
           border-color:
             color-mix(
               in srgb,
-              var(--positive) 40%,
+              var(--accent) 40%,
               var(--line)
             );
 
           background:
             color-mix(
               in srgb,
-              var(--positive) 5%,
+              var(--accent) 5%,
               transparent
             );
         }
@@ -1011,7 +989,7 @@ export default function Header({
           }
 
           .premium-balance {
-            min-width: 240px;
+            min-width: 190px;
           }
 
           .premium-signout {
@@ -1099,26 +1077,16 @@ export default function Header({
           }
 
           .premium-balance {
-            min-height: 62px;
-            padding: 0 13px;
-          }
-
-          .balance-wallet-icon {
-            width: 29px;
-            height: 29px;
+            min-height: 54px;
+            padding: 0 8px;
           }
 
           .balance-text strong {
-            font-size: 18px;
+            font-size: 20px;
           }
 
           .balance-text small {
             font-size: 9px;
-          }
-
-          .balance-edit-icon {
-            width: 20px;
-            height: 20px;
           }
 
           .premium-signout {

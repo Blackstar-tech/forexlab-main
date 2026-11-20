@@ -14,6 +14,7 @@ import AnalyticsView from "@/components/analytics/AnalyticsView";
 import CaseStudyView from "@/components/casestudy/CaseStudyView";
 import TradingViewTab from "@/components/tradingview/TradingViewTab";
 import CalculatorView from "@/components/calculator/CalculatorView";
+import ModelView from "@/components/models/ModelView";
 
 const NAV_ITEMS: { key: TabKey; icon: string; label: string }[] = [
   { key: "dashboard", icon: "📊", label: "Dashboard" },
@@ -23,7 +24,8 @@ const NAV_ITEMS: { key: TabKey; icon: string; label: string }[] = [
   { key: "calculator", icon: "🧮", label: "Calculator" },
   { key: "analytics", icon: "📈", label: "Analytics" },
   { key: "casestudy", icon: "🔬", label: "Case Studies" },
-  { key: "tradingview", icon: "🕯️", label: "TradingView" }
+  { key: "tradingview", icon: "🕯️", label: "TradingView" },
+  { key: "mymodel", icon: "📊", label: "My Model" }
 ];
 
 export default function Home() {
@@ -37,6 +39,7 @@ export default function Home() {
   const [caseStudies, setCaseStudies] = useState<CaseStudy[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
 
   useEffect(() => {
@@ -45,6 +48,29 @@ export default function Home() {
       setSidebarCollapsed(true);
     }
   }, []);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("forexlab.theme");
+    const initialTheme = stored === "light" || stored === "dark"
+      ? stored
+      : window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    setTheme(initialTheme);
+
+    const syncTheme = (event: Event) => {
+      const nextTheme = (event as CustomEvent<{ theme?: "light" | "dark" }>).detail?.theme;
+      if (nextTheme === "light" || nextTheme === "dark") setTheme(nextTheme);
+    };
+    window.addEventListener("themechange", syncTheme);
+    return () => window.removeEventListener("themechange", syncTheme);
+  }, []);
+
+  const handleToggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    localStorage.setItem("forexlab.theme", nextTheme);
+    document.documentElement.setAttribute("data-theme", nextTheme);
+    window.dispatchEvent(new CustomEvent("themechange", { detail: { theme: nextTheme } }));
+  };
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -227,11 +253,28 @@ export default function Home() {
     <div className={`app-view ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
         <div className="sidebar-head">
-          <div className="brand-mark small">FX</div>
-          <div>
-            <strong>ForexLab</strong>
-            <span>PRO JOURNAL</span>
+          <div className="sidebar-brand">
+            <div className="brand-mark small">FX</div>
+            <div>
+              <strong>ForexLab</strong>
+              <span>PRO JOURNAL</span>
+            </div>
           </div>
+          <button
+            type="button"
+            className="sidebar-theme-toggle"
+            onClick={handleToggleTheme}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            <svg className="sidebar-theme-icon" viewBox="0 0 24 24" aria-hidden="true">
+              {theme === "dark" ? (
+                <><circle cx="12" cy="12" r="3.5" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></>
+              ) : (
+                <path d="M20.2 15.6A8.5 8.5 0 0 1 8.4 3.8 8.5 8.5 0 1 0 20.2 15.6Z" />
+              )}
+            </svg>
+          </button>
         </div>
 
         <button
@@ -337,6 +380,9 @@ export default function Home() {
         )}
         {activeTab === "tradingview" && (
           <TradingViewTab />
+        )}
+        {activeTab === "mymodel" && (
+          <ModelView onShowToast={showToast} />
         )}
 
         <Footer />

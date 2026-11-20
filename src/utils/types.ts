@@ -1,7 +1,7 @@
 export type TradeResult = "win" | "loss" | "breakeven";
 export type TradeDirection = "buy" | "sell";
 export type TargetMode = "currency" | "percent";
-export type TabKey = "dashboard" | "log" | "history" | "monthly" | "analytics" | "casestudy" | "tradingview" | "calculator";
+export type TabKey = "dashboard" | "log" | "history" | "monthly" | "analytics" | "casestudy" | "tradingview" | "calculator" | "mymodel";
 
 export type ShotTab = "before" | "after" | "analysis";
 
@@ -65,6 +65,31 @@ export interface CaseStudy {
   setup: string;
   notes: string;
   screenshots: string[];
+  createdAt: string;
+}
+
+export type ModelCategory = "Chart analysis" | "Backtest" | "Forward test" | "Trade idea" | "Case study";
+export type ModelType = "backtest" | "forward";
+export type ModelOutcome = "win" | "loss" | "breakeven";
+
+export interface ModelResult {
+  id: string;
+  userId: string;
+  category: ModelCategory;
+  instrument: string;
+  timeframes: string[];
+  title: string;
+  subtitle: string;
+  modelDate: string;
+  type: ModelType;
+  notes: string;
+  imagePaths: string[];
+  imageUrls: string[];
+  outcome: ModelOutcome | null;
+  resultR: number | null;
+  entry: number | null;
+  stopLoss: number | null;
+  takeProfit: number | null;
   createdAt: string;
 }
 
